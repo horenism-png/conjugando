@@ -1189,7 +1189,7 @@
                     </div>
 
                     {/* Conjugation Prompt and Workpad */}
-                    {currentSpace.type === "verb" && (
+                    {currentSpace?.type === "verb" && (
                       <div className="space-y-4">
                         <div className="p-4 bg-amber-50/80 rounded-2xl border border-amber-200/60 shadow-inner">
                           <h4 className="text-[10px] md:text-xs font-bold text-amber-900 mb-1 uppercase tracking-wider">TU RETO GRAMATICAL:</h4>
@@ -1380,14 +1380,14 @@
                     </div>
                   )}
 
-                  {currentSpace.type === "start" && (
+                  {currentSpace?.type === "start" && (
                     <div className="p-4 bg-blue-50 text-blue-900 rounded-2xl border border-blue-200 text-center">
                       <p className="font-bold">🏁 Estás en la casilla de salida.</p>
                       <p className="text-xs text-blue-700 mt-1">Lanza los dados para emprender tu aventura.</p>
                     </div>
                   )}
 
-                  {currentSpace.type === "finish" && (
+                  {currentSpace?.type === "finish" && (
                     <div className="p-5 bg-indigo-50 border-2 border-indigo-500 text-indigo-950 rounded-2xl text-center shadow-md animate-pulse">
                       <h4 className="font-black text-2xl mb-1 text-indigo-900">🏆 ¡FELICIDADES! 🏆</h4>
                       <p className="text-sm font-semibold mb-3">Has llegado al final del camino.</p>
