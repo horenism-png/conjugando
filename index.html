@@ -1,0 +1,1294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>¡Conjugando! - Spanish Verb Board Game</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React and ReactDOM -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <!-- Stable Babel Standalone UMD to prevent dynamic import issues -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.22.20/babel.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght=300..700&family=Outfit:wght=100..900&display=swap');
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: radial-gradient(circle at top right, #fef9c3 0%, #fef3c7 30%, #f5f5f7 100%);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .fun-font {
+      font-family: 'Fredoka', sans-serif;
+    }
+    /* Snake board animations */
+    .board-cell {
+      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .token-bounce {
+      animation: bounceToken 1.5s infinite alternate;
+    }
+    @keyframes bounceToken {
+      0% { transform: translateY(0); }
+      100% { transform: translateY(-4px); }
+    }
+    /* Custom scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f1f1;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="min-h-screen text-slate-800 antialiased overflow-x-hidden pb-12">
+  <div id="root"></div>
+
+  <!-- Specifying data-presets guarantees Babel compiles correctly with the preloaded UMD modules -->
+  <script type="text/babel" data-presets="env,react">
+    const { useState, useEffect, useRef } = React;
+
+    // Define the pronouns mapping to Dice 2
+    const PRONOUNS = {
+      1: { name: "Yo", translation: "I" },
+      2: { name: "Tú", translation: "You (informal)" },
+      3: { name: "Él / Ella / Ud.", translation: "He / She / You (formal)" },
+      4: { name: "Nosotros / as", translation: "We" },
+      5: { name: "Vosotros / as", translation: "You all (Spain)" },
+      6: { name: "Ellos / Ellas / Uds.", translation: "They / You all (LatAm)" }
+    };
+
+    // Base layout flow structures (indices, types, static elements, and default modifiers)
+    const BASE_BOARD_STRUCTURE = [
+      { id: 0, type: "start", color: "bg-blue-500 text-white border-blue-600", label: "INICIO" },
+      { id: 1, type: "verb", color: "bg-amber-100 border-amber-400 hover:bg-amber-200" },
+      { id: 2, type: "verb", color: "bg-amber-100 border-amber-400 hover:bg-amber-200" },
+      { id: 3, type: "penalty", penalty: -2, color: "bg-emerald-100 border-emerald-500 text-emerald-800 font-bold", label: "Retrocede -2" },
+      { id: 4, type: "verb", color: "bg-amber-100 border-amber-400 hover:bg-amber-200" },
+      { id: 5, type: "verb", color: "bg-amber-100 border-amber-400 hover:bg-amber-200" },
+      { id: 6, type: "verb", color: "bg-amber-100 border-amber-400 hover:bg-amber-200" },
+      { id: 7, type: "verb", color: "bg-amber-100 border-amber-400 hover:bg-amber-200" },
+      { id: 8, type: "bonus", bonus: 1, color: "bg-pink-100 border-pink-500 text-pink-800 font-bold", label: "Avanza +1" },
+      { id: 9, type: "verb", color: "bg-amber-100 border-amber-400 hover:bg-amber-200" },
+      { id: 10, type: "verb", color: "bg-amber-100 border-amber-400 hover:bg-amber-200" },
+      { id: 11, type: "verb", color: "bg-amber-100 border-amber-400 hover:bg-amber-200" },
+      { id: 12, type: "penalty", penalty: -2, color: "bg-emerald-100 border-emerald-500 text-emerald-800 font-bold", label: "Retrocede -2" },
+      { id: 13, type: "verb", color: "bg-amber-100 border-amber-400 hover:bg-amber-200" },
+      { id: 14, type: "verb", color: "bg-amber-100 border-amber-400 hover:bg-amber-200" },
+      { id: 15, type: "verb", color: "bg-amber-100 border-amber-400 hover:bg-amber-200" },
+      { id: 16, type: "verb", color: "bg-amber-100 border-amber-400 hover:bg-amber-200" },
+      { id: 17, type: "bonus", bonus: 2, color: "bg-pink-100 border-pink-500 text-pink-800 font-bold", label: "Avanza +2" },
+      { id: 18, type: "verb", color: "bg-amber-100 border-amber-400 hover:bg-amber-200" },
+      { id: 19, type: "verb", color: "bg-amber-100 border-amber-400 hover:bg-amber-200" },
+      { id: 20, type: "verb", color: "bg-amber-100 border-amber-400 hover:bg-amber-200" },
+      { id: 21, type: "verb", color: "bg-amber-100 border-amber-400 hover:bg-amber-200" },
+      { id: 22, type: "verb", color: "bg-amber-100 border-amber-400 hover:bg-amber-200" },
+      { id: 23, type: "verb", color: "bg-amber-100 border-amber-400 hover:bg-amber-200" },
+      { id: 24, type: "verb", color: "bg-amber-100 border-amber-400 hover:bg-amber-200" },
+      { id: 25, type: "verb", color: "bg-amber-100 border-amber-400 hover:bg-amber-200" },
+      { id: 26, type: "verb", color: "bg-amber-100 border-amber-400 hover:bg-amber-200" },
+      { id: 27, type: "verb", color: "bg-amber-100 border-amber-400 hover:bg-amber-200" },
+      { id: 28, type: "verb", color: "bg-amber-100 border-amber-400 hover:bg-amber-200" },
+      { id: 29, type: "verb", color: "bg-amber-100 border-amber-400 hover:bg-amber-200" },
+      { id: 30, type: "finish", color: "bg-indigo-600 text-white border-indigo-700 font-black", label: "META 🏁" }
+    ];
+
+    // Presets definitions
+    const VERB_PRESETS = {
+      original: [
+        "hacer", "acostarse", "conducir", "vestirse", "salir", "repetir", "querer", "venir", 
+        "decir", "coger", "dar", "volver", "despertarse", "ver", "seguir", "hervir", "estar", 
+        "pensar", "saber", "ir", "preferir", "dormir", "empezar", "tener", "ser"
+      ],
+      regulares: [
+        "hablar", "comer", "vivir", "cantar", "beber", "escribir", "estudiar", "correr", 
+        "abrir", "bailar", "aprender", "recibir", "trabajar", "vender", "discutir", "escuchar", 
+        "leer", "partir", "viajar", "romper", "subir", "buscar", "decidir", "mirar", "permitir"
+      ],
+      reflexivos: [
+        "levantarse", "lavarse", "ducharse", "peinarse", "afeitarse", "cepillarse", "sentarse", 
+        "despedirse", "despertarse", "acostarse", "vestirse", "divertirse", "bañarse", "dormirse", 
+        "irse", "reírse", "preocuparse", "llamarse", "probarse", "quedarse", "maquillarse", 
+        "quitarse", "enojarse", "secarse", "calmarse"
+      ],
+      irregulares: [
+        "ser", "estar", "tener", "ir", "hacer", "poder", "decir", "querer", "saber", "venir", 
+        "ver", "dar", "conocer", "salir", "traer", "oír", "poner", "pedir", "sentir", "pensar", 
+        "dormir", "morir", "jugar", "traducir", "caber"
+      ],
+      massive_pool: [
+        "hablar", "comer", "vivir", "hacer", "ser", "estar", "tener", "ir", "poder", "decir", 
+        "querer", "saber", "venir", "ver", "dar", "conocer", "salir", "traer", "oír", "poner", 
+        "pedir", "sentir", "pensar", "dormir", "morir", "jugar", "escribir", "leer", "estudiar", 
+        "aprender", "levantarse", "ducharse", "volver", "preferir", "empezar", "repetir", "vestirse", 
+        "acostarse", "despertarse", "conducir", "coger", "seguir", "hervir", "cantar", "beber", 
+        "bailar", "viajar", "buscar", "comprar", "vender", "abrir", "cerrar", "correr", "romper", 
+        "comenzar", "entender", "recordar", "perder", "encontrar", "pensar", "recibir", "trabajar"
+      ]
+    };
+
+    // Grid path mapping for a 5-column snake-like layout to display visually
+    const GRID_COORDINATES = [
+      { r: 0, c: 0 }, { r: 0, c: 1 }, { r: 0, c: 2 }, { r: 0, c: 3 }, { r: 0, c: 4 },
+      { r: 1, c: 4 }, { r: 1, c: 3 }, { r: 1, c: 2 }, { r: 1, c: 1 }, { r: 1, c: 0 },
+      { r: 2, c: 0 }, { r: 2, c: 1 }, { r: 2, c: 2 }, { r: 2, c: 3 }, { r: 2, c: 4 },
+      { r: 3, c: 4 }, { r: 3, c: 3 }, { r: 3, c: 2 }, { r: 3, c: 1 }, { r: 3, c: 0 },
+      { r: 4, c: 0 }, { r: 4, c: 1 }, { r: 4, c: 2 }, { r: 4, c: 3 }, { r: 4, c: 4 },
+      { r: 5, c: 4 }, { r: 5, c: 3 }, { r: 5, c: 2 }, { r: 5, c: 1 }, { r: 5, c: 0 },
+      { r: 6, c: 0 }
+    ];
+
+    // Extended player colors array supporting up to 8 players with distinct Tailwind palettes
+    const PLAYER_COLORS = [
+      { id: 0, name: "Amarillo", color: "#eab308", border: "#ca8a04", bg: "bg-yellow-500", text: "text-yellow-500" },
+      { id: 1, name: "Azul", color: "#3b82f6", border: "#2563eb", bg: "bg-blue-500", text: "text-blue-500" },
+      { id: 2, name: "Rojo", color: "#ef4444", border: "#dc2626", bg: "bg-red-500", text: "text-red-500" },
+      { id: 3, name: "Verde", color: "#22c55e", border: "#16a34a", bg: "bg-green-500", text: "text-green-500" },
+      { id: 4, name: "Morado", color: "#a855f7", border: "#9333ea", bg: "bg-purple-500", text: "text-purple-500" },
+      { id: 5, name: "Naranja", color: "#f97316", border: "#ea580c", bg: "bg-orange-500", text: "text-orange-500" },
+      { id: 6, name: "Rosa", color: "#ec4899", border: "#db2777", bg: "bg-pink-500", text: "text-pink-500" },
+      { id: 7, name: "Teal", color: "#14b8a6", border: "#0d9488", bg: "bg-teal-500", text: "text-teal-500" }
+    ];
+
+    function App() {
+      const [numPlayers, setNumPlayers] = useState(1); // Default to 1 for solo practice
+      const [customNames, setCustomNames] = useState({});
+      const [gameStarted, setGameStarted] = useState(false);
+      const [players, setPlayers] = useState([]);
+      const [currentPlayerIdx, setCurrentPlayerIdx] = useState(0);
+      const [diceRoll, setDiceRoll] = useState({ move: 1, pronoun: 1 });
+      const [isRolling, setIsRolling] = useState(false);
+      const [selectedTense, setSelectedTense] = useState("Presente");
+      const [userConjugation, setUserConjugation] = useState("");
+      const [userSentence, setUserSentence] = useState(""); // User sentence challenge input
+      
+      // Dynamic Verbs configuration state
+      const [currentPresetKey, setCurrentPresetKey] = useState("original");
+      const [customVerbsInput, setCustomVerbsInput] = useState("");
+      const [boardSpaces, setBoardSpaces] = useState([]);
+      
+      // AI States & Gamification Streaks
+      const [evaluationResult, setEvaluationResult] = useState(null);
+      const [isEvaluating, setIsEvaluating] = useState(false);
+      const [generatedImageUrl, setGeneratedImageUrl] = useState(null);
+      const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+      const [streak, setStreak] = useState(0); // Track correct answer streak in Solo Practice Mode
+      
+      const [gameLog, setGameLog] = useState([]);
+      const [apiError, setApiError] = useState("");
+      
+      // API Settings State
+      const [showSettings, setShowSettings] = useState(false);
+      const [tempApiKey, setTempApiKey] = useState("");
+      const [savedApiKey, setSavedApiKey] = useState("");
+
+      // Mobile Tab State
+      const [activeTab, setActiveTab] = useState("board"); // 'board', 'game', 'logs'
+      
+      // Custom Confirm Dialog Modal State (replacing window.confirm)
+      const [customConfirm, setCustomConfirm] = useState({
+        show: false,
+        message: "",
+        onConfirm: null
+      });
+
+      // Read saved Gemini key on load
+      useEffect(() => {
+        const storedKey = localStorage.getItem("gemini_boardgame_api_key") || "";
+        setSavedApiKey(storedKey);
+        setTempApiKey(storedKey);
+      }, []);
+
+      // Build active board spaces based on configured verbs
+      useEffect(() => {
+        generateBoardVerbs();
+      }, [currentPresetKey]);
+
+      const generateBoardVerbs = (forceCustomList = null) => {
+        let verbsList = [];
+        const sourceList = forceCustomList || customVerbsInput;
+
+        if (currentPresetKey === "custom" && sourceList) {
+          // Parse custom comma-separated list
+          verbsList = sourceList.split(",")
+            .map(v => v.trim().toLowerCase())
+            .filter(v => v.length > 0);
+          
+          // Pad or truncate to exact 25 verbs needed for the board paths
+          while (verbsList.length < 25) {
+            verbsList.push("hablar"); // default fallback padding
+          }
+          if (verbsList.length > 25) {
+            verbsList = verbsList.slice(0, 25);
+          }
+        } else if (currentPresetKey === "random") {
+          // Shuffle from massive pool
+          const shuffledPool = [...VERB_PRESETS.massive_pool].sort(() => 0.5 - Math.random());
+          verbsList = shuffledPool.slice(0, 25);
+        } else {
+          // Standard presets
+          verbsList = [...(VERB_PRESETS[currentPresetKey] || VERB_PRESETS.original)];
+        }
+
+        // Map verbs into our static element slots
+        let verbCounter = 0;
+        const mappedSpaces = BASE_BOARD_STRUCTURE.map(space => {
+          if (space.type === "verb") {
+            const verbLabel = verbsList[verbCounter] || "estudiar";
+            verbCounter++;
+            return { ...space, label: verbLabel };
+          }
+          return space;
+        });
+
+        setBoardSpaces(mappedSpaces);
+      };
+
+      const handlePresetChange = (key) => {
+        setCurrentPresetKey(key);
+        if (key === "custom" && !customVerbsInput) {
+          setCustomVerbsInput("hablar, comer, vivir, sentir, pensar, oír, jugar, poder, querer, saber, salir, entrar, cantar, saltar, correr, reír, sonreír, soñar, amar, odiar, buscar, encontrar, perder, ganar, viajar");
+        }
+      };
+
+      const applyCustomVerbs = () => {
+        setCurrentPresetKey("custom");
+        generateBoardVerbs(customVerbsInput);
+      };
+
+      const handleNameChange = (playerIndex, name) => {
+        setCustomNames(prev => ({
+          ...prev,
+          [playerIndex]: name
+        }));
+      };
+
+      // Save user configured key
+      const saveSettings = () => {
+        localStorage.setItem("gemini_boardgame_api_key", tempApiKey.trim());
+        setSavedApiKey(tempApiKey.trim());
+        setShowSettings(false);
+      };
+
+      // Retrieve the applicable API Key (user saved -> environment default -> empty)
+      const getActiveApiKey = () => {
+        return savedApiKey.trim() || ""; // Fallback will use standard key if empty string
+      };
+
+      // Init game
+      const startGame = () => {
+        const initPlayers = Array.from({ length: numPlayers }, (_, i) => ({
+          id: i,
+          name: customNames[i]?.trim() || (numPlayers === 1 ? "Practicante" : `Jugador ${i + 1}`),
+          position: 0,
+          colorInfo: PLAYER_COLORS[i]
+        }));
+        setPlayers(initPlayers);
+        setCurrentPlayerIdx(0);
+        setStreak(0); // Reset practice streak
+        setGameStarted(true);
+        setGameLog([`¡El juego ha comenzado! Turno de ${initPlayers[0].name}.`]);
+        setEvaluationResult(null);
+        setGeneratedImageUrl(null);
+        setActiveTab("game"); // Default to game/controls on start
+      };
+
+      const resetGame = () => {
+        setGameStarted(false);
+        setPlayers([]);
+        setStreak(0);
+        setEvaluationResult(null);
+        setGeneratedImageUrl(null);
+        setActiveTab("board");
+      };
+
+      // Play Turn Logic
+      const rollDice = async () => {
+        if (isRolling) return;
+        setIsRolling(true);
+        setEvaluationResult(null);
+        setGeneratedImageUrl(null);
+        setUserConjugation("");
+        setUserSentence("");
+
+        let interval;
+        let counter = 0;
+        interval = setInterval(() => {
+          setDiceRoll({
+            move: Math.floor(Math.random() * 6) + 1,
+            pronoun: Math.floor(Math.random() * 6) + 1
+          });
+          counter++;
+          if (counter > 10) {
+            clearInterval(interval);
+            
+            // Final roll
+            const finalMove = Math.floor(Math.random() * 6) + 1;
+            const finalPronoun = Math.floor(Math.random() * 6) + 1;
+            setDiceRoll({ move: finalMove, pronoun: finalPronoun });
+            setIsRolling(false);
+            
+            processMovement(finalMove, finalPronoun);
+            
+            // Auto switch tabs on mobile to challenge card so player doesn't have to scroll
+            setActiveTab("game");
+          }
+        }, 80);
+      };
+
+      const processMovement = (move, pronounId) => {
+        setPlayers(prevPlayers => {
+          const updated = [...prevPlayers];
+          const player = { ...updated[currentPlayerIdx] };
+          let oldPos = player.position;
+          let targetPos = oldPos + move;
+
+          // Cap at finish
+          if (targetPos >= boardSpaces.length - 1) {
+            targetPos = boardSpaces.length - 1;
+          }
+
+          let space = boardSpaces[targetPos];
+          let extraLog = "";
+
+          // Check for bonus or penalties
+          if (space.type === "penalty") {
+            const finalPos = Math.max(0, targetPos + space.penalty);
+            extraLog = ` ¡Oh no! Cayó en Retroceder. Retrocede a ${boardSpaces[finalPos].label || 'Inicio'}.`;
+            targetPos = finalPos;
+          } else if (space.type === "bonus") {
+            const finalPos = Math.min(boardSpaces.length - 1, targetPos + space.bonus);
+            extraLog = ` ¡Qué suerte! Avanza extra a ${boardSpaces[finalPos].label}.`;
+            targetPos = finalPos;
+          }
+
+          player.position = targetPos;
+          updated[currentPlayerIdx] = player;
+
+          // Add log
+          const pronounWord = PRONOUNS[pronounId].name;
+          const currentVerb = boardSpaces[targetPos].label;
+          const logMsg = `🎲 ${player.name} saca ${move} y avanza a la casilla ${targetPos} (${currentVerb}). Debe conjugar: "${pronounWord}".${extraLog}`;
+          setGameLog(prev => [logMsg, ...prev]);
+
+          return updated;
+        });
+      };
+
+      const nextTurn = () => {
+        setEvaluationResult(null);
+        setGeneratedImageUrl(null);
+        setUserConjugation("");
+        setUserSentence("");
+        setCurrentPlayerIdx((currentPlayerIdx + 1) % numPlayers);
+      };
+
+      // Gemini AI Content Evaluation (updated with Sentence checking logic)
+      const evaluateConjugation = async () => {
+        const activePlayer = players[currentPlayerIdx];
+        const currentSpace = boardSpaces[activePlayer.position];
+        if (currentSpace.type !== "verb" && currentSpace.type !== "start") return;
+
+        const currentKey = getActiveApiKey();
+        if (!currentKey) {
+          setApiError("⚠️ Por favor configure su API Key de Gemini en los ajustes (icono de engranaje en la esquina superior derecha) para poder usar la evaluación automática de Inteligencia Artificial.");
+          setIsEvaluating(false);
+          return;
+        }
+
+        setIsEvaluating(true);
+        setApiError("");
+
+        const verbToConjugate = currentSpace.label;
+        const subjectPronoun = PRONOUNS[diceRoll.pronoun].name;
+
+        const systemPrompt = `You are a friendly Spanish teacher evaluating board game answers. Check if the user's conjugation of the given Spanish verb matches the requested subject pronoun and tense. Also evaluate the custom Spanish sentence they provided, confirming they correctly used the conjugated verb form in context. Check spelling, syntax, natural syntax flow, and accent marks. Respond only in valid JSON format matching this schema:
+        {
+          "isCorrect": boolean,
+          "correctForm": "string",
+          "explanation": "Brief, encouraging explanation in Spanish explaining if the conjugation ending/root is correct, and some context on this verb.",
+          "isSentenceCorrect": boolean,
+          "sentenceExplanation": "Courteous grammatical review of their sentence in Spanish. Fix any mistakes or suggest a more native/natural way to say it."
+        }`;
+
+        const userQuery = `Verb: "${verbToConjugate}". Tense: "${selectedTense}". Subject Pronoun: "${subjectPronoun}". User's Conjugation Attempt: "${userConjugation}". Complete Sentence Attempt using that conjugated verb: "${userSentence}". Check accuracy for both.`;
+
+        try {
+          // Exponential backoff setup
+          let responseText = "";
+          let success = false;
+          let retries = 5;
+          let delay = 1000;
+
+          for (let attempt = 0; attempt < retries; attempt++) {
+            try {
+              const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${currentKey}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  contents: [{ parts: [{ text: userQuery }] }],
+                  systemInstruction: { parts: [{ text: systemPrompt }] },
+                  generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                      type: "OBJECT",
+                      properties: {
+                        isCorrect: { type: "BOOLEAN" },
+                        correctForm: { type: "STRING" },
+                        explanation: { type: "STRING" },
+                        isSentenceCorrect: { type: "BOOLEAN" },
+                        sentenceExplanation: { type: "STRING" }
+                      },
+                      required: ["isCorrect", "correctForm", "explanation", "isSentenceCorrect", "sentenceExplanation"]
+                    }
+                  }
+                })
+              });
+
+              if (res.ok) {
+                const data = await res.json();
+                responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                success = true;
+                break;
+              }
+            } catch (err) {
+              if (attempt === retries - 1) throw err;
+            }
+            await new Promise(resolve => setTimeout(resolve, delay));
+            delay *= 2;
+          }
+
+          if (success && responseText) {
+            const parsed = JSON.parse(responseText);
+            setEvaluationResult(parsed);
+            
+            // Adjust scoring streaks for solo practice mode based on both conjugation AND sentence correctness
+            if (parsed.isCorrect && parsed.isSentenceCorrect) {
+              setStreak(prev => prev + 1);
+            } else {
+              setStreak(0);
+            }
+            
+            // Log results
+            const conjugationStatus = parsed.isCorrect ? "conjugación ✅" : "conjugación ❌";
+            const sentenceStatus = parsed.isSentenceCorrect ? "frase ✅" : "frase ❌";
+            const resultMsg = `📋 ${activePlayer.name}: (${conjugationStatus} | ${sentenceStatus}). Intento: "${userConjugation}" y frase: "${userSentence || 'Ninguna'}".`;
+            setGameLog(prev => [resultMsg, ...prev]);
+          } else {
+            throw new Error("No se pudo obtener respuesta del profesor de Inteligencia Artificial.");
+          }
+        } catch (error) {
+          console.error(error);
+          setApiError("Hubo un error evaluando con la IA. Prueba de nuevo o valida manualmente.");
+        } finally {
+          setIsEvaluating(false);
+        }
+      };
+
+      // Imagen AI Visual Generator
+      const generateVisualPrompt = async () => {
+        const activePlayer = players[currentPlayerIdx];
+        const currentSpace = boardSpaces[activePlayer.position];
+        if (currentSpace.type !== "verb") return;
+
+        const currentKey = getActiveApiKey();
+        if (!currentKey) {
+          setApiError("⚠️ Por favor configure su API Key de Gemini en los ajustes para usar la generación de imágenes.");
+          return;
+        }
+
+        setIsGeneratingImage(true);
+        setApiError("");
+
+        const prompt = `A clear, simple, cute illustration of the Spanish action verb "${currentSpace.label}" (meaning ${currentSpace.label === 'hacer' ? 'to make' : currentSpace.label}) being performed by a friendly cartoon character, learning card, whiteboard style, bright colors, minimal background, educational Spanish flashcard design.`;
+
+        try {
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${currentKey}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              instances: { prompt: prompt },
+              parameters: { sampleCount: 1 }
+            })
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            const base64Bytes = data.predictions?.[0]?.bytesBase64Encoded;
+            if (base64Bytes) {
+              setGeneratedImageUrl(`data:image/png;base64,${base64Bytes}`);
+            } else {
+              throw new Error("No image prediction returned.");
+            }
+          } else {
+            throw new Error("Imagen service offline or limits hit.");
+          }
+        } catch (error) {
+          console.error(error);
+          setApiError("Fallo al generar imagen. Inténtelo de nuevo.");
+        } finally {
+          setIsGeneratingImage(false);
+        }
+      };
+
+      const activePlayer = players[currentPlayerIdx];
+      const currentSpace = activePlayer ? boardSpaces[activePlayer.position] : null;
+
+      // Custom dialog confirmation trigger
+      const triggerConfirm = (message, onConfirmAction) => {
+        setCustomConfirm({
+          show: true,
+          message,
+          onConfirm: () => {
+            onConfirmAction();
+            setCustomConfirm({ show: false, message: "", onConfirm: null });
+          }
+        });
+      };
+
+      return (
+        <div className="max-w-7xl mx-auto px-3 py-4 md:px-4 md:py-10">
+          
+          {/* Header Banner */}
+          <header className="flex items-center justify-between gap-4 mb-4 md:mb-8">
+            <div className="text-left flex-1">
+              <div className="inline-flex items-center gap-2 bg-white px-4 py-1.5 rounded-full shadow-sm border border-amber-200 mb-1">
+                <span className="text-xl">🇪🇸</span>
+                <span className="text-[10px] font-bold tracking-widest text-amber-700 uppercase font-sans">LAE MADRID INSPIRED</span>
+              </div>
+              <h1 className="text-2xl md:text-5xl font-extrabold text-amber-900 fun-font mb-1 drop-shadow-sm">
+                ¡Conjugando!
+              </h1>
+              <p className="text-slate-600 max-w-xl text-[11px] md:text-sm hidden sm:block">
+                The classic verb conjugation snake & ladders game. Roll, move, get a subject pronoun, conjugate, and form a sentence to conquer Spanish!
+              </p>
+            </div>
+
+            {/* Config & Help Gears */}
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setShowSettings(true)}
+                className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/80 p-2.5 md:p-3 rounded-full shadow-md hover:scale-105 transition-all flex items-center justify-center min-w-[44px] min-h-[44px]"
+                title="Configuración de la API"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-indigo-600">
+                  <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              </button>
+            </div>
+          </header>
+
+          {/* Secure Settings Modal Overlay */}
+          {showSettings && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+              <div className="bg-white rounded-3xl p-5 md:p-8 max-w-md w-full shadow-2xl border border-slate-100 transform scale-100 transition-all">
+                <div className="flex justify-between items-center mb-5">
+                  <h3 className="text-lg md:text-xl font-black text-slate-800 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-indigo-600">
+                      <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+                    </svg>
+                    Ajustes de IA
+                  </h3>
+                  <button 
+                    onClick={() => setShowSettings(false)}
+                    className="text-slate-400 hover:text-slate-600 font-bold transition-all p-2 text-lg min-w-[44px] min-h-[44px]"
+                  >
+                    ✕
+                  </button>
+                </div>
+                
+                <p className="text-xs text-slate-500 mb-4 leading-relaxed">
+                  Para utilizar la corrección automática de IA, el juego requiere una API Key de Google Gemini. Tus claves se guardan de forma segura de manera local en tu navegador.
+                </p>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1.5 uppercase tracking-wide">
+                      Gemini API Key
+                    </label>
+                    <input
+                      type="password"
+                      value={tempApiKey}
+                      onChange={(e) => setTempApiKey(e.target.value)}
+                      placeholder="AIzaSy..."
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-mono focus:ring-2 focus:ring-indigo-400 outline-none shadow-inner"
+                    />
+                  </div>
+
+                  <div className="p-3 bg-indigo-50/80 border border-indigo-100 rounded-2xl">
+                    <h4 className="text-xs font-bold text-indigo-950 mb-1">🔑 ¿Cómo conseguir tu clave gratuita?</h4>
+                    <ol className="text-[11px] text-indigo-900/90 list-decimal list-inside space-y-1 leading-relaxed">
+                      <li>Visita <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" className="underline font-bold hover:text-indigo-600">Google AI Studio</a></li>
+                      <li>Inicia sesión con tu cuenta de Google</li>
+                      <li>Haz clic en <strong>Get API Key</strong> en la barra lateral</li>
+                      <li>Genera tu clave y pégala aquí arriba</li>
+                    </ol>
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      onClick={() => {
+                        localStorage.removeItem("gemini_boardgame_api_key");
+                        setTempApiKey("");
+                        setSavedApiKey("");
+                        setShowSettings(false);
+                      }}
+                      className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-3 px-4 rounded-xl text-xs transition-all min-h-[44px]"
+                    >
+                      Borrar Clave
+                    </button>
+                    <button
+                      onClick={saveSettings}
+                      className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-xl text-xs transition-all shadow-md shadow-indigo-100 min-h-[44px]"
+                    >
+                      Guardar Clave
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Built-in Custom Confirm Modal Overlay (No browser alert popups) */}
+          {customConfirm.show && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+              <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 text-center animate-in fade-in zoom-in-95 duration-150">
+                <div className="w-12 h-12 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center mx-auto mb-3">
+                  <span className="text-2xl">⚠️</span>
+                </div>
+                <h4 className="text-base font-black text-slate-800 mb-2">¿Estás seguro?</h4>
+                <p className="text-xs text-slate-500 mb-5 leading-relaxed">{customConfirm.message}</p>
+                <div className="flex gap-2.5">
+                  <button
+                    onClick={() => setCustomConfirm({ show: false, message: "", onConfirm: null })}
+                    className="flex-1 bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl py-2.5 text-xs font-bold transition-all min-h-[44px]"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={customConfirm.onConfirm}
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-2.5 text-xs font-bold transition-all shadow-md shadow-indigo-150 min-h-[44px]"
+                  >
+                    Confirmar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!gameStarted ? (
+            /* Lobby Configuration Screen */
+            <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in duration-300">
+              <div className="bg-white rounded-3xl p-5 md:p-8 shadow-xl border border-slate-100 space-y-6">
+                <h2 className="text-xl md:text-2xl font-bold text-slate-800 text-center mb-4">Configurar Partida</h2>
+                
+                {/* Number of players (Counter starting from 1 up to 8) */}
+                <div>
+                  <div className="flex justify-between items-center mb-3">
+                    <label className="block text-sm font-semibold text-slate-700">Número de Jugadores (Máximo 8)</label>
+                    <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full">
+                      {numPlayers === 1 ? "Práctica Solo 🔥" : `${numPlayers} Activos`}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-4 bg-slate-50 p-2 rounded-2xl border border-slate-200/50">
+                    <button
+                      type="button"
+                      onClick={() => setNumPlayers(prev => Math.max(1, prev - 1))}
+                      className="w-12 h-12 bg-white rounded-xl border border-slate-200 shadow-sm flex items-center justify-center font-bold text-lg text-slate-600 hover:bg-slate-50 transition-all min-w-[44px] min-h-[44px]"
+                    >
+                      -
+                    </button>
+                    <div className="flex-1 text-center font-extrabold text-xl text-slate-800">
+                      {numPlayers} {numPlayers === 1 ? "Jugador (Práctica)" : "Jugadores"}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setNumPlayers(prev => Math.min(8, prev + 1))}
+                      className="w-12 h-12 bg-white rounded-xl border border-slate-200 shadow-sm flex items-center justify-center font-bold text-lg text-slate-600 hover:bg-slate-50 transition-all min-w-[44px] min-h-[44px]"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                {/* Player Name Customizer */}
+                <div className="border-t pt-5 space-y-3">
+                  <h3 className="font-semibold text-sm text-slate-700 mb-2">Nombres de los Jugadores</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    {Array.from({ length: numPlayers }).map((_, idx) => (
+                      <div key={idx} className="flex items-center gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200/50">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-extrabold text-xs shadow-sm ${PLAYER_COLORS[idx].bg}`}>
+                          P{idx + 1}
+                        </div>
+                        <div className="flex-1">
+                          <input
+                            type="text"
+                            value={customNames[idx] || ""}
+                            onChange={(e) => handleNameChange(idx, e.target.value)}
+                            placeholder={numPlayers === 1 ? "Tu Nombre (Práctica)" : `Jugador ${idx + 1}`}
+                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:ring-2 focus:ring-indigo-400 outline-none min-h-[40px]"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Verb Set Customizer Section */}
+                <div className="border-t pt-5">
+                  <label className="block text-sm font-semibold text-slate-700 mb-3">Selección de Banco de Verbos</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+                    <button
+                      onClick={() => handlePresetChange("original")}
+                      className={`p-3 rounded-xl border text-left transition-all min-h-[64px] ${
+                        currentPresetKey === "original"
+                          ? "bg-indigo-50 border-indigo-400 text-indigo-950 ring-2 ring-indigo-200"
+                          : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                      }`}
+                    >
+                      <div className="font-bold text-sm">Original LAE Madrid</div>
+                      <div className="text-[11px] opacity-75">Los verbos de la foto original</div>
+                    </button>
+
+                    <button
+                      onClick={() => handlePresetChange("regulares")}
+                      className={`p-3 rounded-xl border text-left transition-all min-h-[64px] ${
+                        currentPresetKey === "regulares"
+                          ? "bg-indigo-50 border-indigo-400 text-indigo-950 ring-2 ring-indigo-200"
+                          : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                      }`}
+                    >
+                      <div className="font-bold text-sm">Regulares Básicos</div>
+                      <div className="text-[11px] opacity-75">Ideales para principiantes (-AR/-ER/-IR)</div>
+                    </button>
+
+                    <button
+                      onClick={() => handlePresetChange("reflexivos")}
+                      className={`p-3 rounded-xl border text-left transition-all min-h-[64px] ${
+                        currentPresetKey === "reflexivos"
+                          ? "bg-indigo-50 border-indigo-400 text-indigo-950 ring-2 ring-indigo-200"
+                          : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                      }`}
+                    >
+                      <div className="font-bold text-sm">Rutina Diaria (Reflexivos)</div>
+                      <div className="text-[11px] opacity-75">Verbos con pronombre "se"</div>
+                    </button>
+
+                    <button
+                      onClick={() => handlePresetChange("irregulares")}
+                      className={`p-3 rounded-xl border text-left transition-all min-h-[64px] ${
+                        currentPresetKey === "irregulares"
+                          ? "bg-indigo-50 border-indigo-400 text-indigo-950 ring-2 ring-indigo-200"
+                          : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                      }`}
+                    >
+                      <div className="font-bold text-sm">Irregulares Frecuentes</div>
+                      <div className="text-[11px] opacity-75">Irregularidades comunes</div>
+                    </button>
+
+                    <button
+                      onClick={() => handlePresetChange("random")}
+                      className={`p-3 rounded-xl border text-left transition-all min-h-[64px] ${
+                        currentPresetKey === "random"
+                          ? "bg-indigo-50 border-indigo-400 text-indigo-950 ring-2 ring-indigo-200"
+                          : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                      }`}
+                    >
+                      <div className="font-bold text-sm flex items-center gap-1">Mezclar Aleatorios 🎲</div>
+                      <div className="text-[11px] opacity-75">Genera 25 verbos variados</div>
+                    </button>
+
+                    <button
+                      onClick={() => handlePresetChange("custom")}
+                      className={`p-3 rounded-xl border text-left transition-all min-h-[64px] ${
+                        currentPresetKey === "custom"
+                          ? "bg-indigo-50 border-indigo-400 text-indigo-950 ring-2 ring-indigo-200"
+                          : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                      }`}
+                    >
+                      <div className="font-bold text-sm">Tus propios verbos ✍️</div>
+                      <div className="text-[11px] opacity-75">Crea tu lista personalizada</div>
+                    </button>
+                  </div>
+
+                  {/* Custom Word List Input Box */}
+                  {currentPresetKey === "custom" && (
+                    <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                      <div className="text-xs font-bold text-slate-600">
+                        Escribe 25 verbos separados por comas:
+                      </div>
+                      <textarea
+                        value={customVerbsInput}
+                        onChange={(e) => setCustomVerbsInput(e.target.value)}
+                        className="w-full h-24 p-3 border border-slate-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-indigo-400 outline-none"
+                        placeholder="ej: hablar, comer, vivir, sentir, pensar, oír..."
+                      />
+                      <button
+                        onClick={applyCustomVerbs}
+                        className="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2.5 px-4 rounded-lg text-xs transition-all min-h-[40px]"
+                      >
+                        Aplicar Verbos Personalizados
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Secure warning if API Key is not set */}
+                {!savedApiKey && (
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
+                    <span className="text-xl">⚠️</span>
+                    <div className="text-xs text-amber-800 leading-relaxed">
+                      <strong>Recomendado para jugar:</strong> No se ha configurado ninguna API Key de Gemini. Podrás jugar y tirar los dados, pero la corrección automática de IA no estará disponible. Haz clic en el engranaje ⚙️ de arriba para añadir una clave de forma gratuita en 20 segundos.
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  onClick={startGame}
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold py-4 px-6 rounded-2xl shadow-lg shadow-indigo-200 transition-all flex items-center justify-center gap-2 text-base md:text-lg font-sans min-h-[52px]"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+                    <polygon points="5 3 19 12 5 21 5 3" />
+                  </svg>
+                  ¡Comenzar el Juego!
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Game Arena Layout */
+            <div className="space-y-4 animate-in fade-in duration-300">
+              
+              {/* Responsive Tab Bar (Mobile ONLY) */}
+              <div className="lg:hidden flex bg-white/80 backdrop-blur border border-slate-200 rounded-2xl p-1 shadow-sm sticky top-2 z-40 gap-1">
+                <button
+                  onClick={() => setActiveTab("board")}
+                  className={`flex-1 py-3 px-2 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 min-h-[44px] ${
+                    activeTab === "board" 
+                      ? "bg-amber-500 text-white shadow-sm" 
+                      : "text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  🗺️ Tablero
+                </button>
+                <button
+                  onClick={() => setActiveTab("game")}
+                  className={`flex-1 py-3 px-2 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 min-h-[44px] relative ${
+                    activeTab === "game" 
+                      ? "bg-indigo-600 text-white shadow-sm" 
+                      : "text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  ⚡ Reto Activo
+                  {currentSpace?.type === "verb" && !evaluationResult && (
+                    <span className="w-2.5 h-2.5 bg-red-500 border border-white rounded-full absolute top-2 right-2 animate-ping" />
+                  )}
+                </button>
+                <button
+                  onClick={() => setActiveTab("logs")}
+                  className={`flex-1 py-3 px-2 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 min-h-[44px] ${
+                    activeTab === "logs" 
+                      ? "bg-slate-800 text-white shadow-sm" 
+                      : "text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  📋 Historial
+                </button>
+              </div>
+
+              {/* Side-by-side or Tab-driven content block */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                
+                {/* Visual Game Board Column (Desktop Always Visible, Mobile shown on tab select) */}
+                <div className={`lg:col-span-7 bg-white p-4 md:p-6 rounded-3xl shadow-xl border border-slate-100 ${
+                  activeTab === "board" ? "block" : "hidden lg:block"
+                }`}>
+                  <div className="flex justify-between items-center mb-5">
+                    <h2 className="text-lg md:text-xl font-black text-slate-800 flex items-center gap-2">
+                      <span className="p-2 bg-amber-100 rounded-lg">🎲</span>
+                      Tablero de Verbos
+                    </h2>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          triggerConfirm("¿Deseas mezclar verbos aleatorios en el tablero? Esto conservará las posiciones de los jugadores.", () => {
+                            const shuffledPool = [...VERB_PRESETS.massive_pool].sort(() => 0.5 - Math.random());
+                            const newVerbs = shuffledPool.slice(0, 25);
+                            let verbCounter = 0;
+                            setBoardSpaces(prev => prev.map(space => {
+                              if (space.type === "verb") {
+                                const label = newVerbs[verbCounter] || "estudiar";
+                                verbCounter++;
+                                return { ...space, label };
+                              }
+                              return space;
+                            }));
+                            setGameLog(prev => ["🔄 ¡Verbos del tablero refrescados con nuevas palabras!", ...prev]);
+                          });
+                        }}
+                        className="text-[10px] sm:text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 px-3 py-2 rounded-full font-bold hover:bg-indigo-100 transition-all flex items-center gap-1 min-h-[36px]"
+                        title="Refrescar verbos de inmediato"
+                      >
+                        <span>🔄 Refrescar</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Snake Path Layout - Responsive sizes for smaller displays */}
+                  <div className="grid grid-cols-5 gap-1.5 sm:gap-3 p-1.5 sm:p-3 bg-slate-50 rounded-2xl border border-slate-200/60 relative">
+                    {boardSpaces.map((space, index) => {
+                      const coords = GRID_COORDINATES[index] || { r: 0, c: 0 };
+                      const playersOnSpace = players.filter(p => p.position === index);
+
+                      return (
+                        <div
+                          key={space.id}
+                          className={`board-cell relative aspect-square sm:aspect-auto md:h-24 rounded-xl sm:rounded-2xl border p-1 sm:p-2 flex flex-col justify-between items-center text-center shadow-sm select-none transition-all ${space.color}`}
+                          style={{
+                            gridRow: coords.r + 1,
+                            gridColumn: coords.c + 1
+                          }}
+                        >
+                          {/* Space Index badge */}
+                          <span className="absolute top-1 left-1.5 text-[8px] sm:text-[10px] font-bold opacity-60 leading-none">
+                            {index === 0 ? "INICIO" : index === 30 ? "META" : index}
+                          </span>
+
+                          {/* Special Actions Icon */}
+                          {space.type === "penalty" && (
+                            <span className="text-emerald-600 text-[8px] sm:text-xs font-black mt-2.5 sm:mt-1">↩️ -2</span>
+                          )}
+                          {space.type === "bonus" && (
+                            <span className="text-pink-600 text-[8px] sm:text-xs font-black mt-2.5 sm:mt-1">🏃‍♂️ +{space.bonus}</span>
+                          )}
+
+                          {/* Verb tag with fluid fonts */}
+                          <span className="font-black text-[9px] xs:text-[10px] sm:text-sm capitalize mt-auto mb-auto max-w-full truncate px-0.5 leading-tight">
+                            {space.type === "verb" ? space.label : ""}
+                          </span>
+
+                          {/* Player Tokens wrapper (scales neatly in grid layouts) */}
+                          <div className="flex flex-wrap gap-0.5 sm:gap-1 justify-center items-center mt-auto min-h-[16px] sm:min-h-[24px] w-full">
+                            {playersOnSpace.map(player => (
+                              <div
+                                key={player.id}
+                                className={`w-4 h-4 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-[7px] sm:text-[11px] font-extrabold text-white border border-white/60 shadow-md token-bounce`}
+                                style={{ backgroundColor: player.colorInfo.color }}
+                                title={player.name}
+                              >
+                                P{player.id + 1}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Legend bar */}
+                  <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 mt-5 text-[10px] sm:text-xs text-slate-600 border-t pt-4 border-slate-100">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3.5 h-3.5 bg-amber-100 border border-amber-400 rounded"></div>
+                      <span>Verbos Activos</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3.5 h-3.5 bg-emerald-100 border border-emerald-500 rounded"></div>
+                      <span>Retrocede (-2)</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3.5 h-3.5 bg-pink-100 border border-pink-500 rounded"></div>
+                      <span>Avanza (+1 o +2)</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Column: Game Controls, Dice & AI Evaluator (Desktop Always, Mobile only on tab) */}
+                <div className={`lg:col-span-5 space-y-5 ${
+                  activeTab === "game" ? "block" : "hidden lg:block"
+                }`}>
+                  
+                  {/* Active Player Status & Actions Card */}
+                  <div className="bg-white p-5 md:p-6 rounded-3xl shadow-xl border-2 border-amber-400 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-amber-100 rounded-full mix-blend-multiply filter blur-xl opacity-70 -mr-6 -mt-6"></div>
+                    
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-3 h-3 rounded-full ${activePlayer.colorInfo.bg}`} />
+                        <span className="font-extrabold text-[10px] md:text-xs uppercase text-slate-500 tracking-wider">
+                          {numPlayers === 1 ? "MODO PRÁCTICA SOLO" : "TURNO ACTUAL"}
+                        </span>
+                      </div>
+                      <button 
+                        onClick={() => triggerConfirm("¿Estás seguro de que deseas salir y reiniciar la partida?", resetGame)} 
+                        className="text-xs text-red-500 hover:text-red-700 font-bold transition-all min-h-[32px] px-2"
+                      >
+                        Salir del Juego
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+                      <h3 className="text-xl md:text-2xl font-black text-slate-800 fun-font flex items-center gap-2">
+                        <span className={activePlayer.colorInfo.text}>{activePlayer.name}</span>
+                        <span className="text-xs bg-slate-100 text-slate-600 font-semibold px-2 py-1 rounded-md">
+                          Casilla {activePlayer.position}
+                        </span>
+                      </h3>
+                      {numPlayers === 1 && (
+                        <div className="bg-amber-100 border border-amber-200 px-3 py-1 rounded-xl flex items-center gap-1.5 shadow-sm">
+                          <span className="text-xs font-bold text-amber-800">🔥 Racha: {streak}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Dice Rolling Simulator */}
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col items-center justify-center gap-4 mb-5">
+                      
+                      <div className="flex justify-around w-full gap-4">
+                        {/* Move Die */}
+                        <div className="text-center">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Dado 1 (Avanzar)</span>
+                          <div className={`w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-white border-2 border-amber-500 flex items-center justify-center text-2xl md:text-3xl font-black text-amber-700 shadow-md transform ${isRolling ? "animate-spin" : ""}`}>
+                            {diceRoll.move}
+                          </div>
+                        </div>
+
+                        {/* Grammar Person Die */}
+                        <div className="text-center">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Dado 2 (Sujeto)</span>
+                          <div className={`w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-white border-2 border-indigo-500 flex items-center justify-center text-3xl font-black text-indigo-700 shadow-md transform ${isRolling ? "animate-bounce" : ""}`}>
+                            {diceRoll.pronoun}
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={rollDice}
+                        disabled={isRolling}
+                        className="w-full mt-1 bg-amber-500 hover:bg-amber-600 text-white font-extrabold py-3.5 px-6 rounded-xl shadow-md disabled:bg-slate-300 transition-all font-sans"
+                      >
+                        {isRolling ? "Lanzando dados..." : "🎲 Lanzar Ambos Dados"}
+                      </button>
+                    </div>
+
+                    {/* Conjugation Prompt and Workpad */}
+                    {currentSpace.type === "verb" && (
+                      <div className="space-y-4">
+                        <div className="p-4 bg-amber-50/80 rounded-2xl border border-amber-200/60 shadow-inner">
+                          <h4 className="text-[10px] md:text-xs font-bold text-amber-900 mb-1 uppercase tracking-wider">TU RETO GRAMATICAL:</h4>
+                          <div className="text-base md:text-lg font-black text-amber-950 flex flex-wrap gap-2 items-center">
+                            Conjuga <span className="underline decoration-wavy decoration-amber-500">{currentSpace.label}</span> 
+                            para <span className="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-lg">{PRONOUNS[diceRoll.pronoun].name}</span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-2">
+                            Significado del verbo: <span className="italic font-medium">{currentSpace.label} ({PRONOUNS[diceRoll.pronoun].translation})</span>
+                          </p>
+                        </div>
+
+                        {/* Tense selector */}
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Tiempo:</label>
+                          <select 
+                            value={selectedTense} 
+                            onChange={(e) => setSelectedTense(e.target.value)}
+                            className="text-xs bg-slate-100 border-none rounded-lg p-2 font-bold text-slate-700 focus:outline-none"
+                          >
+                            <option value="Presente">Presente Simple</option>
+                            <option value="Pretérito Indefinido">Pretérito Indefinido</option>
+                            <option value="Pretérito Imperfecto">Pretérito Imperfecto</option>
+                            <option value="Futuro Simple">Futuro Simple</option>
+                          </select>
+                        </div>
+
+                        {/* Dual Challenge Box (Conjugation + Sentence Challenge) */}
+                        <div className="space-y-3.5">
+                          <div>
+                            <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">
+                              1. Conjugación (Conjugation)
+                            </label>
+                            <input
+                              type="text"
+                              value={userConjugation}
+                              onChange={(e) => setUserConjugation(e.target.value)}
+                              placeholder="Escribe tu conjugación aquí..."
+                              className="w-full p-3.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-400 outline-none text-base font-bold shadow-sm"
+                            />
+                        </div>
+
+                        <div>
+                          <div className="flex justify-between items-center mb-1.5">
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
+                              2. Frase completa (Complete Sentence)
+                            </label>
+                            <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
+                              Recomendado
+                            </span>
+                          </div>
+                          <textarea
+                            value={userSentence}
+                            onChange={(e) => setUserSentence(e.target.value)}
+                            placeholder={`Escribe una frase usando tu conjugación...\n(ej: "Yo ${userConjugation || 'hago'} mi tarea hoy")`}
+                            className="w-full h-20 p-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-400 outline-none text-sm font-semibold shadow-sm resize-none"
+                          />
+                        </div>
+                        
+                        <div className="flex gap-2">
+                          <button
+                            onClick={evaluateConjugation}
+                            disabled={isEvaluating || !userConjugation}
+                            className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold py-3.5 px-4 rounded-xl shadow-md disabled:bg-slate-300 transition-all flex items-center justify-center gap-2 min-h-[44px]"
+                          >
+                            {isEvaluating ? (
+                              <span>Evaluando...</span>
+                            ) : (
+                              <>
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+                                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                                  <polyline points="22 4 12 14.01 9 11.01" />
+                                </svg>
+                                Evaluar con IA (Gemini)
+                              </>
+                            )}
+                          </button>
+
+                          <button
+                            onClick={generateVisualPrompt}
+                            disabled={isGeneratingImage}
+                            className="bg-purple-600 hover:bg-purple-700 text-white font-extrabold p-3 rounded-xl shadow-md disabled:bg-slate-300 transition-all min-w-[44px] min-h-[44px] flex items-center justify-center"
+                            title="Generar imagen del verbo con Imagen 4"
+                          >
+                            {isGeneratingImage ? "..." : "🎨"}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* API Error Box */}
+                      {apiError && (
+                        <div className="p-3 bg-red-100 border border-red-300 rounded-xl text-xs text-red-700">
+                          {apiError}
+                        </div>
+                      )}
+
+                      {/* AI Evaluation Result Card */}
+                      {evaluationResult && (
+                        <div className={`p-5 rounded-2xl border ${
+                          evaluationResult.isCorrect ? "bg-emerald-50 border-emerald-300 text-emerald-950" : "bg-red-50 border-red-300 text-red-950"
+                        }`}>
+                          
+                          {/* Conjugation Verification */}
+                          <div className="mb-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-2xl">{evaluationResult.isCorrect ? "🎉" : "💡"}</span>
+                              <span className="font-extrabold uppercase tracking-wide text-xs text-slate-500">
+                                {evaluationResult.isCorrect ? "¡EXCELENTE TRABAJO!" : "Casi correcto..."}
+                              </span>
+                            </div>
+                            <p className="font-bold text-base mb-1">
+                              Tu conjugación: <span className="italic">{userConjugation}</span>
+                            </p>
+                            <p className="font-medium text-sm mb-3 text-indigo-900">
+                              Forma Correcta: <span className="bg-white/80 px-2.5 py-1 rounded border border-slate-200/50 font-extrabold">{evaluationResult.correctForm}</span>
+                            </p>
+                            <p className="text-xs text-slate-700 leading-relaxed bg-white/40 p-3 rounded-xl border border-white">
+                              {evaluationResult.explanation}
+                            </p>
+                          </div>
+
+                          {/* Sentence Verification Block */}
+                          {userSentence && evaluationResult.sentenceExplanation && (
+                            <div className="pt-3.5 border-t border-dashed border-slate-300/80">
+                              <div className="flex items-center gap-1.5 mb-2">
+                                <span className="text-lg">{evaluationResult.isSentenceCorrect ? "📝" : "✏️"}</span>
+                                <span className="font-bold text-xs uppercase tracking-wide text-slate-500">
+                                  {evaluationResult.isSentenceCorrect ? "FRASE CORRECTA" : "CORRECCIÓN DE FRASE"}
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-700 leading-relaxed font-mono italic bg-white/50 p-2 rounded-lg border border-slate-200/60 mb-2 truncate" title={userSentence}>
+                                "{userSentence}"
+                              </p>
+                              <p className="text-xs text-slate-700 leading-relaxed">
+                                {evaluationResult.sentenceExplanation}
+                              </p>
+                            </div>
+                          )}
+                          
+                          <button
+                            onClick={nextTurn}
+                            className="mt-4 w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3.5 px-4 rounded-xl text-xs transition-all shadow-sm min-h-[44px]"
+                          >
+                            {numPlayers === 1 ? "Continuar Práctica 👉" : "Siguiente Turno 👉"}
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Imagen 4 AI Generated Visual Card */}
+                      {generatedImageUrl && (
+                        <div className="mt-4 p-4 bg-slate-100 border border-slate-200 rounded-2xl overflow-hidden flex flex-col items-center animate-fade-in">
+                          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Flashcard Visual Prompts (Imagen AI)</span>
+                          <img src={generatedImageUrl} alt="Spanish Verb Prompt" className="w-full max-h-60 object-contain rounded-xl shadow-md" />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {currentSpace.type === "start" && (
+                    <div className="p-4 bg-blue-50 text-blue-900 rounded-2xl border border-blue-200 text-center">
+                      <p className="font-bold">🏁 Estás en la casilla de salida.</p>
+                      <p className="text-xs text-blue-700 mt-1">Lanza los dados para emprender tu aventura.</p>
+                    </div>
+                  )}
+
+                  {currentSpace.type === "finish" && (
+                    <div className="p-5 bg-indigo-50 border-2 border-indigo-500 text-indigo-950 rounded-2xl text-center shadow-md animate-pulse">
+                      <h4 className="font-black text-2xl mb-1 text-indigo-900">🏆 ¡FELICIDADES! 🏆</h4>
+                      <p className="text-sm font-semibold mb-3">Has llegado al final del camino.</p>
+                      <p className="text-xs text-indigo-800">¡Dominas las conjugaciones verbales en español perfectamente!</p>
+                      <button onClick={resetGame} className="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-xl text-xs min-h-[44px]">
+                        Jugar de nuevo
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                </div>
+
+                {/* Game Logs / Actions History Column (Desktop right block, Mobile only on tab) */}
+                <div className={`lg:col-span-5 bg-white p-5 md:p-6 rounded-3xl shadow-xl border border-slate-100 max-h-[400px] overflow-y-auto ${
+                  activeTab === "logs" ? "block" : "hidden lg:block"
+                }`}>
+                  <h3 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
+                    <span className="p-2 bg-slate-100 rounded-lg">📋</span>
+                    Historial del Juego
+                  </h3>
+                  
+                  <div className="space-y-2.5">
+                    {gameLog.length === 0 ? (
+                      <p className="text-xs text-slate-400 italic">No hay registros de juego aún.</p>
+                    ) : (
+                      gameLog.map((log, index) => (
+                        <div key={index} className="text-xs text-slate-600 border-b border-slate-100 pb-2 leading-relaxed">
+                          {log}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+              </div>
+              
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Render App
+    const container = document.getElementById('root');
+    const root = ReactDOM.createRoot(container);
+    root.render(App !== undefined ? <App /> : <div>Error loading game app</div>);
+  </script>
+</body>
+</html>
