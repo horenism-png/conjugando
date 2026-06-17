@@ -697,7 +697,7 @@
                     <h4 className="text-xs font-bold text-indigo-950 mb-1">🔑 ¿Cómo conseguir tu clave gratuita?</h4>
                     <ol className="text-[11px] text-indigo-900/90 list-decimal list-inside space-y-1 leading-relaxed">
                       <li>Visita <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" className="underline font-bold hover:text-indigo-600">Google AI Studio</a></li>
-                      <li>Genera tu clave y pégala aquí arriba</li>
+                      <li>Genera tu clave and pégala aquí arriba</li>
                     </ol>
                   </div>
 
@@ -1229,6 +1229,9 @@
                               onChange={(e) => setUserConjugation(e.target.value)}
                               placeholder="Escribe tu conjugación aquí..."
                               className="w-full p-3.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-400 outline-none text-base font-bold shadow-sm"
+                              autoComplete="off"
+                              autoCorrect="off"
+                              autoCapitalize="none"
                             />
                         </div>
 
@@ -1246,6 +1249,9 @@
                             onChange={(e) => setUserSentence(e.target.value)}
                             placeholder={`Escribe una frase usando tu conjugación...\n(ej: "Yo ${userConjugation || 'hago'} mi tarea hoy")`}
                             className="w-full h-20 p-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-400 outline-none text-sm font-semibold shadow-sm resize-none"
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="none"
                           />
                         </div>
                         
@@ -1272,7 +1278,7 @@
                           ) : (
                             /* Peer Grading Buttons */
                             <div className="flex-1 bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col gap-2 text-center">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">🗣️ Calificación del Grupo o Profesor</span>
+                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block font-sans">🗣️ Calificación del Grupo o Profesor</span>
                               <div className="flex gap-2">
                                 <button
                                   onClick={() => evaluateManually(true)}
@@ -1409,7 +1415,7 @@
                       <p className="text-xs text-slate-400 italic">No hay registros de juego aún.</p>
                     ) : (
                       gameLog.map((log, index) => (
-                        <div key={key || index} className="text-xs text-slate-600 border-b border-slate-100 pb-2 leading-relaxed">
+                        <div key={index} className="text-xs text-slate-600 border-b border-slate-100 pb-2 leading-relaxed">
                           {log}
                         </div>
                       ))
