@@ -208,13 +208,15 @@
         onConfirm: null
       });
 
+      const apiKey = ""; // API key is supplied by environment at runtime
+
       // Read saved Gemini key on load and choose default gameMode accordingly
       useEffect(() => {
         const storedKey = localStorage.getItem("gemini_boardgame_api_key") || "";
         setSavedApiKey(storedKey);
         setTempApiKey(storedKey);
-        if (storedKey) {
-          setGameMode("ai"); // Default to AI if key is already there
+        if (storedKey || apiKey) {
+          setGameMode("ai"); // Default to AI if key is already there or supplied by sandbox
         } else {
           setGameMode("manual"); // Default to Peer manual grading
         }
@@ -290,13 +292,15 @@
         setSavedApiKey(tempApiKey.trim());
         if (tempApiKey.trim() !== "") {
           setGameMode("ai");
+        } else if (!apiKey) {
+          setGameMode("manual");
         }
         setShowSettings(false);
       };
 
-      // Retrieve the applicable API Key (user saved -> environment default -> empty)
+      // Retrieve the applicable API Key (user saved -> environment default)
       const getActiveApiKey = () => {
-        return savedApiKey.trim() || ""; // Fallback will use standard key if empty string
+        return savedApiKey.trim() || apiKey || "";
       };
 
       // Init game
@@ -496,7 +500,7 @@
         setGameLog(prev => [resultMsg, ...prev]);
       };
 
-      // Gemini AI Content Evaluation using the active, stable gemini-2.5-flash-preview-09-2025 model (or gemini-2.5-flash for production keys)
+      // Gemini AI Content Evaluation using the active, stable gemini-2.5-flash model (or preview build)
       const evaluateConjugation = async () => {
         const activePlayer = players[currentPlayerIdx];
         const currentSpace = boardSpaces[activePlayer.position];
@@ -521,7 +525,14 @@
 
         const userQuery = `Verb: "${verbToConjugate}". Tense: "${selectedTense}". Subject Pronoun: "${subjectPronoun}". User's Conjugation Attempt: "${userConjugation}". Complete Sentence Attempt using that conjugated verb: "${userSentence}". Check accuracy for both.`;
 
-        // DYNAMIC MODEL SELECTION: Prevents 404 errors on production keys
+        // DYNAMIC MODEL SELECTION: If the key comes from user settings, target the production model. If it is the workspace/sandbox preview key, target the preview model.
+        // If no key is configured, warn the user rather than failing with 404
+        if (!currentKey) {
+          setApiError("⚠️ No se ha detectado una API Key. Por favor configura tu clave de Gemini en el engranaje ⚙️ de arriba a la derecha, o cambia al modo Manual / Grupo.");
+          setIsEvaluating(false);
+          return;
+        }
+
         const modelName = savedApiKey ? "gemini-2.5-flash" : "gemini-2.5-flash-preview-09-2025";
 
         try {
@@ -579,9 +590,6 @@
         } catch (error) {
           console.error(error);
           let errDetail = error.message;
-          if (!currentKey) {
-            errDetail = "⚠️ No has guardado ninguna API Key. Si estás jugando fuera de este editor (ej. en GitHub Pages), debes agregar tu clave en el icono de engranaje ⚙️ de la esquina superior derecha.";
-          }
           setApiError(errDetail);
         } finally {
           setIsEvaluating(false);
@@ -634,8 +642,9 @@
         }
       };
 
-      const activePlayer = players[currentPlayerIdx];
-      const currentSpace = boardSpaces[activePlayer.position] ? boardSpaces[activePlayer.position] : null;
+      // Safely access active player and space coordinates
+      const activePlayer = players[currentPlayerIdx] || null;
+      const currentSpace = (activePlayer && boardSpaces[activePlayer.position]) ? boardSpaces[activePlayer.position] : null;
 
       // Custom dialog confirmation trigger
       const triggerConfirm = (message, onConfirmAction) => {
@@ -718,7 +727,13 @@
                     </button>
                     <button
                       type="button"
-                      onClick={() => setGameMode("ai")}
+                      onClick={() => {
+                        if (!savedApiKey && !apiKey) {
+                          setShowSettings(true);
+                        } else {
+                          setGameMode("ai");
+                        }
+                      }}
                       className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
                         gameMode === "ai" ? "bg-white text-indigo-800 shadow-sm" : "text-slate-500 hover:bg-slate-50"
                       }`}
@@ -841,7 +856,7 @@
                     <button
                       type="button"
                       onClick={() => {
-                        if (!savedApiKey) {
+                        if (!savedApiKey && !apiKey) {
                           setShowSettings(true);
                         } else {
                           setGameMode("ai");
@@ -1011,7 +1026,7 @@
                 </div>
 
                 {/* Secure warning if API Key is not set and AI mode chosen */}
-                {gameMode === "ai" && !savedApiKey && (
+                {gameMode === "ai" && !savedApiKey && !apiKey && (
                   <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
                     <span className="text-xl">⚠️</span>
                     <div className="text-xs text-amber-800 leading-relaxed font-sans">
@@ -1189,7 +1204,7 @@
                     
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-2">
-                        <div className={`w-3 h-3 rounded-full ${activePlayer.colorInfo.bg}`} />
+                        <div className={`w-3 h-3 rounded-full ${activePlayer?.colorInfo.bg || "bg-yellow-500"}`} />
                         <span className="font-extrabold text-[10px] md:text-xs uppercase text-slate-500 tracking-wider">
                           {numPlayers === 1 ? `MODO PRÁCTICA (${gameMode === 'ai' ? 'IA' : 'MANUAL'})` : `TURNO ACTUAL (${gameMode === 'ai' ? 'IA' : 'MANUAL'})`}
                         </span>
@@ -1202,19 +1217,21 @@
                       </button>
                     </div>
 
-                    <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
-                      <h3 className="text-xl md:text-2xl font-black text-slate-800 fun-font flex items-center gap-2">
-                        <span className={activePlayer.colorInfo.text}>{activePlayer.name}</span>
-                        <span className="text-xs bg-slate-100 text-slate-600 font-semibold px-2 py-1 rounded-md">
-                          Casilla {activePlayer.position}
-                        </span>
-                      </h3>
-                      {numPlayers === 1 && (
-                        <div className="bg-amber-100 border border-amber-200 px-3 py-1 rounded-xl flex items-center gap-1.5 shadow-sm">
-                          <span className="text-xs font-bold text-amber-800">🔥 Racha: {streak}</span>
-                        </div>
-                      )}
-                    </div>
+                    {activePlayer && (
+                      <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+                        <h3 className="text-xl md:text-2xl font-black text-slate-800 fun-font flex items-center gap-2">
+                          <span className={activePlayer.colorInfo.text}>{activePlayer.name}</span>
+                          <span className="text-xs bg-slate-100 text-slate-600 font-semibold px-2 py-1 rounded-md">
+                            Casilla {activePlayer.position}
+                          </span>
+                        </h3>
+                        {numPlayers === 1 && (
+                          <div className="bg-amber-100 border border-amber-200 px-3 py-1 rounded-xl flex items-center gap-1.5 shadow-sm">
+                            <span className="text-xs font-bold text-amber-800">🔥 Racha: {streak}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {/* Dice Rolling Simulator */}
                     <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col items-center justify-center gap-4 mb-5">
@@ -1320,205 +1337,205 @@
                               autoCorrect="off"
                               autoCapitalize="none"
                             />
-                        </div>
-
-                        <div>
-                          <div className="flex justify-between items-center mb-1.5">
-                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
-                              2. Frase completa (Complete Sentence)
-                            </label>
-                            <div className="flex gap-1.5">
-                              <button
-                                onClick={() => startSpeechRecognition('sentence')}
-                                className={`p-1.5 rounded-lg border text-xs font-bold transition-all flex items-center gap-1 ${
-                                  isDictatingSentence ? "bg-red-500 text-white border-red-600 recording-pulse" : "bg-white border-slate-200 hover:bg-slate-50 text-slate-600"
-                                }`}
-                                title="Haz clic para dictar la frase completa por voz"
-                              >
-                                  <span>🎙️ {isDictatingSentence ? "Habla..." : "Decir"}</span>
-                              </button>
-                              <button
-                                onClick={() => speakSpanishText(userSentence)}
-                                disabled={!userSentence}
-                                className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 text-xs font-bold disabled:opacity-40"
-                              >
-                                🔊 Escuchar
-                              </button>
-                            </div>
-                          </div>
-                          <textarea
-                            value={userSentence}
-                            onChange={(e) => setUserSentence(e.target.value)}
-                            placeholder={`Escribe una frase usando tu conjugación...\n(ej: "Yo ${userConjugation || 'hago'} mi tarea hoy")`}
-                            className="w-full h-20 p-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-400 outline-none text-sm font-semibold shadow-sm resize-none"
-                            autoComplete="off"
-                            autoCorrect="off"
-                            autoCapitalize="none"
-                          />
-                        </div>
-                        
-                        {/* Dual Action / Evaluation Buttons */}
-                        <div className="flex flex-col sm:flex-row gap-2">
-                          {gameMode === "ai" ? (
-                            <button
-                              onClick={evaluateConjugation}
-                              disabled={isEvaluating || !userConjugation}
-                              className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold py-3.5 px-4 rounded-xl shadow-md disabled:bg-slate-300 transition-all flex items-center justify-center gap-2 min-h-[44px]"
-                            >
-                              {isEvaluating ? (
-                                <span>Evaluando con IA...</span>
-                              ) : (
-                                <>
-                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-                                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                                    <polyline points="22 4 12 14.01 9 11.01" />
-                                  </svg>
-                                  Evaluar con IA (Gemini)
-                                </>
-                              )}
-                            </button>
-                          ) : (
-                            /* Peer Grading Buttons */
-                            <div className="flex-1 bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col gap-2 text-center">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block font-sans">🗣️ Calificación del Grupo o Profesor</span>
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => evaluateManually(true)}
-                                  disabled={!userConjugation}
-                                  className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2.5 px-3 rounded-xl text-xs transition-all flex items-center justify-center gap-1 shadow-sm min-h-[44px]"
-                                >
-                                  ¡Correcto! ✅
-                                </button>
-                                <button
-                                  onClick={() => evaluateManually(false)}
-                                  disabled={!userConjugation}
-                                  className="flex-1 bg-rose-500 hover:bg-rose-600 text-white font-bold py-2.5 px-3 rounded-xl text-xs transition-all flex items-center justify-center gap-1 shadow-sm min-h-[44px]"
-                                >
-                                  Incorrecto ❌
-                                </button>
-                              </div>
-                            </div>
-                          )}
-
-                          <button
-                            onClick={generateVisualPrompt}
-                            disabled={isGeneratingImage || !savedApiKey}
-                            className="bg-purple-600 hover:bg-purple-700 text-white font-extrabold p-3 rounded-xl shadow-md disabled:bg-slate-200 disabled:text-slate-400 transition-all min-w-[44px] min-h-[44px] flex items-center justify-center"
-                            title={savedApiKey ? "Generar imagen del verbo con Imagen 4" : "Generación de imagen requiere API Key"}
-                          >
-                            {isGeneratingImage ? "..." : "🎨"}
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* API Error Box */}
-                      {apiError && (
-                        <div className="p-3 bg-red-100 border border-red-300 rounded-xl text-xs text-red-700">
-                          {apiError}
-                        </div>
-                      )}
-
-                      {/* AI or Manual Evaluation Result Card */}
-                      {evaluationResult && (
-                        <div className={`p-5 rounded-2xl border ${
-                          evaluationResult.isCorrect ? "bg-emerald-50 border-emerald-300 text-emerald-950" : "bg-red-50 border-red-300 text-red-950"
-                        }`}>
-                          
-                          {/* Conjugation Verification */}
-                          <div className="mb-3">
-                            <div className="flex items-center gap-2 mb-2 justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="text-2xl">{evaluationResult.isCorrect ? "🎉" : "💡"}</span>
-                                <span className="font-extrabold uppercase tracking-wide text-xs text-slate-500">
-                                  {evaluationResult.isCorrect ? "¡RESPUESTA APROBADA!" : "Casi correcto..."}
-                                </span>
-                              </div>
-                              {/* Hear correct form button */}
-                              {evaluationResult.correctForm && (
-                                <button
-                                  onClick={() => speakSpanishText(evaluationResult.correctForm)}
-                                  className="text-xs bg-white text-indigo-700 hover:bg-slate-100 border border-slate-200 px-2 py-1 rounded shadow-sm"
-                                >
-                                  🔊 Pronunciación
-                                </button>
-                              )}
-                            </div>
-                            <p className="font-bold text-base mb-1">
-                              Intento: <span className="italic">"{userConjugation}"</span>
-                            </p>
-                            {gameMode === "ai" && (
-                              <p className="font-medium text-sm mb-3 text-indigo-900">
-                                Forma Correcta: <span className="bg-white/80 px-2.5 py-1 rounded border border-slate-200/50 font-extrabold">{evaluationResult.correctForm}</span>
-                              </p>
-                            )}
-                            <p className="text-xs text-slate-700 leading-relaxed bg-white/40 p-3 rounded-xl border border-white">
-                              {evaluationResult.explanation}
-                            </p>
                           </div>
 
-                          {/* Sentence Verification Block */}
-                          {userSentence && evaluationResult.sentenceExplanation && (
-                            <div className="pt-3.5 border-t border-dashed border-slate-300/80">
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-lg">{evaluationResult.isSentenceCorrect ? "📝" : "✏️"}</span>
-                                  <span className="font-bold text-xs uppercase tracking-wide text-slate-500">
-                                    {gameMode === "ai" ? "CORRECCIÓN DE FRASE" : "ESTADO DE FRASE"}
-                                  </span>
-                                </div>
+                          <div>
+                            <div className="flex justify-between items-center mb-1.5">
+                              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                2. Frase completa (Complete Sentence)
+                              </label>
+                              <div className="flex gap-1.5">
+                                <button
+                                  onClick={() => startSpeechRecognition('sentence')}
+                                  className={`p-1.5 rounded-lg border text-xs font-bold transition-all flex items-center gap-1 ${
+                                    isDictatingSentence ? "bg-red-500 text-white border-red-600 recording-pulse" : "bg-white border-slate-200 hover:bg-slate-50 text-slate-600"
+                                  }`}
+                                  title="Haz clic para dictar la frase completa por voz"
+                                >
+                                    <span>🎙️ {isDictatingSentence ? "Habla..." : "Decir"}</span>
+                                </button>
                                 <button
                                   onClick={() => speakSpanishText(userSentence)}
-                                  className="text-xs bg-white text-indigo-700 hover:bg-slate-100 border border-slate-200 px-2 py-1 rounded shadow-sm"
+                                  disabled={!userSentence}
+                                  className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 text-xs font-bold disabled:opacity-40"
                                 >
-                                  🔊 Escuchar frase
+                                  🔊 Escuchar
                                 </button>
                               </div>
-                              <p className="text-xs text-slate-700 leading-relaxed font-mono italic bg-white/50 p-2 rounded-lg border border-slate-200/60 mb-2 truncate" title={userSentence}>
-                                "{userSentence}"
+                            </div>
+                            <textarea
+                              value={userSentence}
+                              onChange={(e) => setUserSentence(e.target.value)}
+                              placeholder={`Escribe una frase usando tu conjugación...\n(ej: "Yo ${userConjugation || 'hago'} mi tarea hoy")`}
+                              className="w-full h-20 p-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-400 outline-none text-sm font-semibold shadow-sm resize-none"
+                              autoComplete="off"
+                              autoCorrect="off"
+                              autoCapitalize="none"
+                            />
+                          </div>
+                          
+                          {/* Dual Action / Evaluation Buttons */}
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            {gameMode === "ai" ? (
+                              <button
+                                onClick={evaluateConjugation}
+                                disabled={isEvaluating || !userConjugation}
+                                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold py-3.5 px-4 rounded-xl shadow-md disabled:bg-slate-300 transition-all flex items-center justify-center gap-2 min-h-[44px]"
+                              >
+                                {isEvaluating ? (
+                                  <span>Evaluando con IA...</span>
+                                ) : (
+                                  <>
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+                                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                                      <polyline points="22 4 12 14.01 9 11.01" />
+                                    </svg>
+                                    Evaluar con IA (Gemini)
+                                  </>
+                                )}
+                              </button>
+                            ) : (
+                              /* Peer Grading Buttons */
+                              <div className="flex-1 bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col gap-2 text-center">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block font-sans">🗣️ Calificación del Grupo o Profesor</span>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => evaluateManually(true)}
+                                    disabled={!userConjugation}
+                                    className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2.5 px-3 rounded-xl text-xs transition-all flex items-center justify-center gap-1 shadow-sm min-h-[44px]"
+                                  >
+                                    ¡Correcto! ✅
+                                  </button>
+                                  <button
+                                    onClick={() => evaluateManually(false)}
+                                    disabled={!userConjugation}
+                                    className="flex-1 bg-rose-500 hover:bg-rose-600 text-white font-bold py-2.5 px-3 rounded-xl text-xs transition-all flex items-center justify-center gap-1 shadow-sm min-h-[44px]"
+                                  >
+                                    Incorrecto ❌
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            <button
+                              onClick={generateVisualPrompt}
+                              disabled={isGeneratingImage || !savedApiKey}
+                              className="bg-purple-600 hover:bg-purple-700 text-white font-extrabold p-3 rounded-xl shadow-md disabled:bg-slate-200 disabled:text-slate-400 transition-all min-w-[44px] min-h-[44px] flex items-center justify-center"
+                              title={savedApiKey ? "Generar imagen del verbo con Imagen 4" : "Generación de imagen requiere API Key"}
+                            >
+                              {isGeneratingImage ? "..." : "🎨"}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* API Error Box */}
+                        {apiError && (
+                          <div className="p-3 bg-red-100 border border-red-300 rounded-xl text-xs text-red-700">
+                            {apiError}
+                          </div>
+                        )}
+
+                        {/* AI or Manual Evaluation Result Card */}
+                        {evaluationResult && (
+                          <div className={`p-5 rounded-2xl border ${
+                            evaluationResult.isCorrect ? "bg-emerald-50 border-emerald-300 text-emerald-950" : "bg-red-50 border-red-300 text-red-950"
+                          }`}>
+                            
+                            {/* Conjugation Verification */}
+                            <div className="mb-3">
+                              <div className="flex items-center gap-2 mb-2 justify-between">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-2xl">{evaluationResult.isCorrect ? "🎉" : "💡"}</span>
+                                  <span className="font-extrabold uppercase tracking-wide text-xs text-slate-500">
+                                    {evaluationResult.isCorrect ? "¡RESPUESTA APROBADA!" : "Casi correcto..."}
+                                  </span>
+                                </div>
+                                {/* Hear correct form button */}
+                                {evaluationResult.correctForm && (
+                                  <button
+                                    onClick={() => speakSpanishText(evaluationResult.correctForm)}
+                                    className="text-xs bg-white text-indigo-700 hover:bg-slate-100 border border-slate-200 px-2 py-1 rounded shadow-sm"
+                                  >
+                                    🔊 Pronunciación
+                                  </button>
+                                )}
+                              </div>
+                              <p className="font-bold text-base mb-1">
+                                Intento: <span className="italic">"{userConjugation}"</span>
                               </p>
-                              <p className="text-xs text-slate-700 leading-relaxed">
-                                {evaluationResult.sentenceExplanation}
+                              {gameMode === "ai" && (
+                                <p className="font-medium text-sm mb-3 text-indigo-900">
+                                  Forma Correcta: <span className="bg-white/80 px-2.5 py-1 rounded border border-slate-200/50 font-extrabold">{evaluationResult.correctForm}</span>
+                                </p>
+                              )}
+                              <p className="text-xs text-slate-700 leading-relaxed bg-white/40 p-3 rounded-xl border border-white">
+                                {evaluationResult.explanation}
                               </p>
                             </div>
-                          )}
-                          
-                          <button
-                            onClick={nextTurn}
-                            className="mt-4 w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3.5 px-4 rounded-xl text-xs transition-all shadow-sm min-h-[44px]"
-                          >
-                            {numPlayers === 1 ? "Continuar Práctica 👉" : "Siguiente Turno 👉"}
-                          </button>
-                        </div>
-                      )}
 
-                      {/* Imagen 4 AI Generated Visual Card */}
-                      {generatedImageUrl && (
-                        <div className="mt-4 p-4 bg-slate-100 border border-slate-200 rounded-2xl overflow-hidden flex flex-col items-center animate-fade-in">
-                          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Flashcard Visual Prompts (Imagen AI)</span>
-                          <img src={generatedImageUrl} alt="Spanish Verb Prompt" className="w-full max-h-60 object-contain rounded-xl shadow-md" />
-                        </div>
-                      )}
-                    </div>
-                  )}
+                            {/* Sentence Verification Block */}
+                            {userSentence && evaluationResult.sentenceExplanation && (
+                              <div className="pt-3.5 border-t border-dashed border-slate-300/80">
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-lg">{evaluationResult.isSentenceCorrect ? "📝" : "✏️"}</span>
+                                    <span className="font-bold text-xs uppercase tracking-wide text-slate-500">
+                                      {gameMode === "ai" ? "CORRECCIÓN DE FRASE" : "ESTADO DE FRASE"}
+                                    </span>
+                                  </div>
+                                  <button
+                                    onClick={() => speakSpanishText(userSentence)}
+                                    className="text-xs bg-white text-indigo-700 hover:bg-slate-100 border border-slate-200 px-2 py-1 rounded shadow-sm"
+                                  >
+                                    🔊 Escuchar frase
+                                  </button>
+                                </div>
+                                <p className="text-xs text-slate-700 leading-relaxed font-mono italic bg-white/50 p-2 rounded-lg border border-slate-200/60 mb-2 truncate" title={userSentence}>
+                                  "{userSentence}"
+                                </p>
+                                <p className="text-xs text-slate-700 leading-relaxed">
+                                  {evaluationResult.sentenceExplanation}
+                                </p>
+                              </div>
+                            )}
+                            
+                            <button
+                              onClick={nextTurn}
+                              className="mt-4 w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3.5 px-4 rounded-xl text-xs transition-all shadow-sm min-h-[44px]"
+                            >
+                              {numPlayers === 1 ? "Continuar Práctica 👉" : "Siguiente Turno 👉"}
+                            </button>
+                          </div>
+                        )}
 
-                  {currentSpace?.type === "start" && (
-                    <div className="p-4 bg-blue-50 text-blue-900 rounded-2xl border border-blue-200 text-center">
-                      <p className="font-bold">🏁 Estás en la casilla de salida.</p>
-                      <p className="text-xs text-blue-700 mt-1">Lanza los dados para emprender tu aventura.</p>
-                    </div>
-                  )}
+                        {/* Imagen 4 AI Generated Visual Card */}
+                        {generatedImageUrl && (
+                          <div className="mt-4 p-4 bg-slate-100 border border-slate-200 rounded-2xl overflow-hidden flex flex-col items-center animate-fade-in">
+                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Flashcard Visual Prompts (Imagen AI)</span>
+                            <img src={generatedImageUrl} alt="Spanish Verb Prompt" className="w-full max-h-60 object-contain rounded-xl shadow-md" />
+                          </div>
+                        )}
+                      </div>
+                    )}
 
-                  {currentSpace?.type === "finish" && (
-                    <div className="p-5 bg-indigo-50 border-2 border-indigo-500 text-indigo-950 rounded-2xl text-center shadow-md animate-pulse">
-                      <h4 className="font-black text-2xl mb-1 text-indigo-900">🏆 ¡FELICIDADES! 🏆</h4>
-                      <p className="text-sm font-semibold mb-3">Has llegado al final del camino.</p>
-                      <p className="text-xs text-indigo-800">¡Dominas las conjugaciones verbales en español perfectamente!</p>
-                      <button onClick={resetGame} className="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-xl text-xs min-h-[44px]">
-                        Jugar de nuevo
-                      </button>
-                    </div>
-                  )}
-                </div>
+                    {currentSpace?.type === "start" && (
+                      <div className="p-4 bg-blue-50 text-blue-900 rounded-2xl border border-blue-200 text-center">
+                        <p className="font-bold">🏁 Estás en la casilla de salida.</p>
+                        <p className="text-xs text-blue-700 mt-1">Lanza los dados para emprender tu aventura.</p>
+                      </div>
+                    )}
+
+                    {currentSpace?.type === "finish" && (
+                      <div className="p-5 bg-indigo-50 border-2 border-indigo-500 text-indigo-950 rounded-2xl text-center shadow-md animate-pulse">
+                        <h4 className="font-black text-2xl mb-1 text-indigo-900">🏆 ¡FELICIDADES! 🏆</h4>
+                        <p className="text-sm font-semibold mb-3">Has llegado al final del camino.</p>
+                        <p className="text-xs text-indigo-800">¡Dominas las conjugaciones verbales en español perfectamente!</p>
+                        <button onClick={resetGame} className="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-xl text-xs min-h-[44px]">
+                          Jugar de nuevo
+                        </button>
+                      </div>
+                    )}
+                  </div>
 
                 </div>
 
