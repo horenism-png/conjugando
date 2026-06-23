@@ -496,7 +496,7 @@
         setGameLog(prev => [resultMsg, ...prev]);
       };
 
-      // Gemini AI Content Evaluation using the active, stable gemini-2.5-flash-preview-09-2025 model
+      // Gemini AI Content Evaluation using the active, stable gemini-2.5-flash-preview-09-2025 model (or gemini-2.5-flash for production keys)
       const evaluateConjugation = async () => {
         const activePlayer = players[currentPlayerIdx];
         const currentSpace = boardSpaces[activePlayer.position];
@@ -521,9 +521,11 @@
 
         const userQuery = `Verb: "${verbToConjugate}". Tense: "${selectedTense}". Subject Pronoun: "${subjectPronoun}". User's Conjugation Attempt: "${userConjugation}". Complete Sentence Attempt using that conjugated verb: "${userSentence}". Check accuracy for both.`;
 
+        // DYNAMIC MODEL SELECTION: Prevents 404 errors on production keys
+        const modelName = savedApiKey ? "gemini-2.5-flash" : "gemini-2.5-flash-preview-09-2025";
+
         try {
-          // Using gemini-2.5-flash-preview-09-2025 as the standard platform-supported model
-          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${currentKey}`, {
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${currentKey}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -604,7 +606,7 @@
         const prompt = `A clear, simple, cute illustration of the Spanish action verb "${currentSpace.label}" (meaning ${currentSpace.label === 'hacer' ? 'to make' : currentSpace.label}) being performed by a friendly cartoon character, learning card, whiteboard style, bright colors, minimal background, educational Spanish flashcard design.`;
 
         try {
-          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${currentKey}`, {
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${currentKey}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -633,7 +635,7 @@
       };
 
       const activePlayer = players[currentPlayerIdx];
-      const currentSpace = activePlayer ? boardSpaces[activePlayer.position] : null;
+      const currentSpace = boardSpaces[activePlayer.position] ? boardSpaces[activePlayer.position] : null;
 
       // Custom dialog confirmation trigger
       const triggerConfirm = (message, onConfirmAction) => {
@@ -753,7 +755,7 @@
                     <h4 className="text-xs font-bold text-indigo-950 mb-1">🔑 ¿Cómo conseguir tu clave gratuita?</h4>
                     <ol className="text-[11px] text-indigo-900/90 list-decimal list-inside space-y-1 leading-relaxed">
                       <li>Visita <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" className="underline font-bold hover:text-indigo-600">Google AI Studio</a></li>
-                      <li>Genera tu clave and pégala aquí arriba</li>
+                      <li>Genera tu clave y pégala aquí arriba</li>
                     </ol>
                   </div>
 
