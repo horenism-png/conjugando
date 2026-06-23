@@ -29,7 +29,7 @@
       animation: bounceToken 1.5s infinite alternate;
     }
     @keyframes bounceToken {
-      0 { transform: translateY(0); }
+      0% { transform: translateY(0); }
       100% { transform: translateY(-4px); }
     }
     /* Custom scrollbars */
@@ -496,19 +496,14 @@
         setGameLog(prev => [resultMsg, ...prev]);
       };
 
-      // Gemini AI Content Evaluation using the active, stable gemini-1.5-flash model
+      // Gemini AI Content Evaluation using the active, stable gemini-2.5-flash-preview-09-2025 model
       const evaluateConjugation = async () => {
         const activePlayer = players[currentPlayerIdx];
         const currentSpace = boardSpaces[activePlayer.position];
         if (currentSpace.type !== "verb" && currentSpace.type !== "start") return;
 
         const currentKey = getActiveApiKey();
-        if (!currentKey) {
-          setApiError("⚠️ Por favor configure su API Key de Gemini en los ajustes (icono de engranaje en la esquina superior derecha) para poder usar la evaluación automática de Inteligencia Artificial.");
-          setIsEvaluating(false);
-          return;
-        }
-
+        
         setIsEvaluating(true);
         setApiError("");
 
@@ -527,51 +522,40 @@
         const userQuery = `Verb: "${verbToConjugate}". Tense: "${selectedTense}". Subject Pronoun: "${subjectPronoun}". User's Conjugation Attempt: "${userConjugation}". Complete Sentence Attempt using that conjugated verb: "${userSentence}". Check accuracy for both.`;
 
         try {
-          // Exponential backoff setup - using stable gemini-1.5-flash model
-          let responseText = "";
-          let success = false;
-          let retries = 5;
-          let delay = 1000;
-
-          for (let attempt = 0; attempt < retries; attempt++) {
-            try {
-              const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${currentKey}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  contents: [{ parts: [{ text: userQuery }] }],
-                  systemInstruction: { parts: [{ text: systemPrompt }] },
-                  generationConfig: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                      type: "OBJECT",
-                      properties: {
-                        isCorrect: { type: "BOOLEAN" },
-                        correctForm: { type: "STRING" },
-                        explanation: { type: "STRING" },
-                        isSentenceCorrect: { type: "BOOLEAN" },
-                        sentenceExplanation: { type: "STRING" }
-                      },
-                      required: ["isCorrect", "correctForm", "explanation", "isSentenceCorrect", "sentenceExplanation"]
-                    }
-                  }
-                })
-              });
-
-              if (res.ok) {
-                const data = await res.json();
-                responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-                success = true;
-                break;
+          // Using gemini-2.5-flash-preview-09-2025 as the standard platform-supported model
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${currentKey}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: userQuery }] }],
+              systemInstruction: { parts: [{ text: systemPrompt }] },
+              generationConfig: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                  type: "OBJECT",
+                  properties: {
+                    isCorrect: { type: "BOOLEAN" },
+                    correctForm: { type: "STRING" },
+                    explanation: { type: "STRING" },
+                    isSentenceCorrect: { type: "BOOLEAN" },
+                    sentenceExplanation: { type: "STRING" }
+                  },
+                  required: ["isCorrect", "correctForm", "explanation", "isSentenceCorrect", "sentenceExplanation"]
+                }
               }
-            } catch (err) {
-              if (attempt === retries - 1) throw err;
-            }
-            await new Promise(resolve => setTimeout(resolve, delay));
-            delay *= 2;
+            })
+          });
+
+          if (!res.ok) {
+            const errDetails = await res.json().catch(() => ({}));
+            const apiMsg = errDetails?.error?.message || res.statusText || "Error de red";
+            throw new Error(`[Status ${res.status}] ${apiMsg}`);
           }
 
-          if (success && responseText) {
+          const data = await res.json();
+          const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+          if (responseText) {
             const parsed = JSON.parse(responseText);
             setEvaluationResult(parsed);
             
@@ -588,11 +572,15 @@
             const resultMsg = `📋 ${activePlayer.name}: (${conjugationStatus} | ${sentenceStatus}). Intento: "${userConjugation}" y frase: "${userSentence || 'Ninguna'}".`;
             setGameLog(prev => [resultMsg, ...prev]);
           } else {
-            throw new Error("No se pudo obtener respuesta del profesor de Inteligencia Artificial.");
+            throw new Error("La IA no devolvió un cuerpo de texto válido.");
           }
         } catch (error) {
           console.error(error);
-          setApiError("Hubo un error evaluando con la IA. Prueba de nuevo o valida manualmente.");
+          let errDetail = error.message;
+          if (!currentKey) {
+            errDetail = "⚠️ No has guardado ninguna API Key. Si estás jugando fuera de este editor (ej. en GitHub Pages), debes agregar tu clave en el icono de engranaje ⚙️ de la esquina superior derecha.";
+          }
+          setApiError(errDetail);
         } finally {
           setIsEvaluating(false);
         }
@@ -1348,7 +1336,7 @@
                                 }`}
                                 title="Haz clic para dictar la frase completa por voz"
                               >
-                                <span>🎙️ {isDictatingSentence ? "Grabando..." : "Dictar"}</span>
+                                  <span>🎙️ {isDictatingSentence ? "Grabando..." : "Dictar"}</span>
                               </button>
                               {userSentence && (
                                 <button
