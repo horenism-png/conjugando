@@ -43,6 +43,13 @@
       background: #cbd5e1;
       border-radius: 4px;
     }
+    @keyframes pulse-red {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.1); opacity: 0.6; }
+    }
+    .recording-pulse {
+      animation: pulse-red 1.2s infinite;
+    }
   </style>
 </head>
 <body class="min-h-screen text-slate-800 antialiased overflow-x-hidden pb-12">
@@ -166,6 +173,10 @@
       const [userConjugation, setUserConjugation] = useState("");
       const [userSentence, setUserSentence] = useState(""); // User sentence challenge input
       
+      // Voice & Dictation States
+      const [isDictatingConjugation, setIsDictatingConjugation] = useState(false);
+      const [isDictatingSentence, setIsDictatingSentence] = useState(false);
+
       // Dynamic Verbs configuration state
       const [currentPresetKey, setCurrentPresetKey] = useState("original");
       const [customVerbsInput, setCustomVerbsInput] = useState("");
@@ -313,6 +324,63 @@
         setEvaluationResult(null);
         setGeneratedImageUrl(null);
         setActiveTab("board");
+      };
+
+      // Native Spanish audio helper
+      const speakSpanishText = (textToSay) => {
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel(); // Stop current speech
+          const utterance = new SpeechSynthesisUtterance(textToSay);
+          utterance.lang = 'es-ES'; // Spain Spanish voice profile fallback
+          window.speechSynthesis.speak(utterance);
+        } else {
+          setApiError("⚠️ El Text-to-Speech (reproductor de voz) no está soportado en este navegador.");
+        }
+      };
+
+      // Voice Dictation handler
+      const startSpeechRecognition = (targetField) => {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+          setApiError("⚠️ El dictado por voz no está soportado en este navegador o iframe. Te recomendamos usar Google Chrome.");
+          return;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'es-ES';
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        if (targetField === 'conjugation') {
+          setIsDictatingConjugation(true);
+        } else {
+          setIsDictatingSentence(true);
+        }
+
+        recognition.onresult = (event) => {
+          const transcript = event.results[0][0].transcript;
+          if (targetField === 'conjugation') {
+            // Strip punctuation and spacing
+            const cleanWord = transcript.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"").toLowerCase().trim();
+            setUserConjugation(cleanWord);
+          } else {
+            setUserSentence(transcript);
+          }
+        };
+
+        recognition.onerror = (event) => {
+          console.error("Speech recognition error", event.error);
+          setApiError("Error de dictado de voz: " + event.error);
+          setIsDictatingConjugation(false);
+          setIsDictatingSentence(false);
+        };
+
+        recognition.onend = () => {
+          setIsDictatingConjugation(false);
+          setIsDictatingSentence(false);
+        };
+
+        recognition.start();
       };
 
       // Play Turn Logic
@@ -1192,7 +1260,17 @@
                     {currentSpace?.type === "verb" && (
                       <div className="space-y-4">
                         <div className="p-4 bg-amber-50/80 rounded-2xl border border-amber-200/60 shadow-inner">
-                          <h4 className="text-[10px] md:text-xs font-bold text-amber-900 mb-1 uppercase tracking-wider">TU RETO GRAMATICAL:</h4>
+                          <div className="flex justify-between items-center mb-1">
+                            <h4 className="text-[10px] md:text-xs font-bold text-amber-900 uppercase tracking-wider">TU RETO GRAMATICAL:</h4>
+                            {/* Speak verb button */}
+                            <button
+                              onClick={() => speakSpanishText(`${PRONOUNS[diceRoll.pronoun].name} ${currentSpace.label}`)}
+                              className="text-xs bg-white hover:bg-amber-100 text-amber-800 border border-amber-300/80 px-2 py-1 rounded-lg flex items-center gap-1 transition-all"
+                              title="Escuchar pronunciación del reto"
+                            >
+                              <span>🔊 Escuchar reto</span>
+                            </button>
+                          </div>
                           <div className="text-base md:text-lg font-black text-amber-950 flex flex-wrap gap-2 items-center">
                             Conjuga <span className="underline decoration-wavy decoration-amber-500">{currentSpace.label}</span> 
                             para <span className="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-lg">{PRONOUNS[diceRoll.pronoun].name}</span>
@@ -1220,9 +1298,31 @@
                         {/* Dual Challenge Box (Conjugation + Sentence Challenge) */}
                         <div className="space-y-3.5">
                           <div>
-                            <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">
-                              1. Conjugación (Conjugation)
-                            </label>
+                            <div className="flex justify-between items-center mb-1.5">
+                              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                1. Conjugación (Conjugation)
+                              </label>
+                              <div className="flex gap-1.5">
+                                <button
+                                  onClick={() => startSpeechRecognition('conjugation')}
+                                  className={`p-1.5 rounded-lg border text-xs font-bold transition-all flex items-center gap-1 ${
+                                    isDictatingConjugation ? "bg-red-500 text-white border-red-600 recording-pulse" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                                  }`}
+                                  title="Haz clic para dictar la conjugación por voz"
+                                >
+                                  <span>🎙️ {isDictatingConjugation ? "Grabando..." : "Dictar"}</span>
+                                </button>
+                                {userConjugation && (
+                                  <button
+                                    onClick={() => speakSpanishText(userConjugation)}
+                                    className="p-1.5 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 rounded-lg text-xs"
+                                    title="Escuchar tu respuesta"
+                                  >
+                                    🔊
+                                  </button>
+                                )}
+                              </div>
+                            </div>
                             <input
                               type="text"
                               value={userConjugation}
@@ -1240,9 +1340,26 @@
                             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
                               2. Frase completa (Complete Sentence)
                             </label>
-                            <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
-                              Recomendado
-                            </span>
+                            <div className="flex gap-1.5">
+                              <button
+                                onClick={() => startSpeechRecognition('sentence')}
+                                className={`p-1.5 rounded-lg border text-xs font-bold transition-all flex items-center gap-1 ${
+                                  isDictatingSentence ? "bg-red-500 text-white border-red-600 recording-pulse" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                                }`}
+                                title="Haz clic para dictar la frase completa por voz"
+                              >
+                                <span>🎙️ {isDictatingSentence ? "Grabando..." : "Dictar"}</span>
+                              </button>
+                              {userSentence && (
+                                <button
+                                  onClick={() => speakSpanishText(userSentence)}
+                                  className="p-1.5 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 rounded-lg text-xs"
+                                  title="Escuchar tu frase"
+                                >
+                                  🔊
+                                </button>
+                              )}
+                            </div>
                           </div>
                           <textarea
                             value={userSentence}
@@ -1324,11 +1441,22 @@
                           
                           {/* Conjugation Verification */}
                           <div className="mb-3">
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className="text-2xl">{evaluationResult.isCorrect ? "🎉" : "💡"}</span>
-                              <span className="font-extrabold uppercase tracking-wide text-xs text-slate-500">
-                                {evaluationResult.isCorrect ? "¡RESPUESTA APROBADA!" : "Casi correcto..."}
-                              </span>
+                            <div className="flex items-center gap-2 mb-2 justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="text-2xl">{evaluationResult.isCorrect ? "🎉" : "💡"}</span>
+                                <span className="font-extrabold uppercase tracking-wide text-xs text-slate-500">
+                                  {evaluationResult.isCorrect ? "¡RESPUESTA APROBADA!" : "Casi correcto..."}
+                                </span>
+                              </div>
+                              {/* Hear correct form button */}
+                              {evaluationResult.correctForm && (
+                                <button
+                                  onClick={() => speakSpanishText(evaluationResult.correctForm)}
+                                  className="text-xs bg-white text-indigo-700 hover:bg-slate-100 border border-slate-200 px-2 py-1 rounded shadow-sm"
+                                >
+                                  🔊 Pronunciación
+                                </button>
+                              )}
                             </div>
                             <p className="font-bold text-base mb-1">
                               Intento: <span className="italic">"{userConjugation}"</span>
@@ -1346,11 +1474,19 @@
                           {/* Sentence Verification Block */}
                           {userSentence && evaluationResult.sentenceExplanation && (
                             <div className="pt-3.5 border-t border-dashed border-slate-300/80">
-                              <div className="flex items-center gap-1.5 mb-2">
-                                <span className="text-lg">{evaluationResult.isSentenceCorrect ? "📝" : "✏️"}</span>
-                                <span className="font-bold text-xs uppercase tracking-wide text-slate-500">
-                                  {gameMode === "ai" ? "CORRECCIÓN DE FRASE" : "ESTADO DE FRASE"}
-                                </span>
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-lg">{evaluationResult.isSentenceCorrect ? "📝" : "✏️"}</span>
+                                  <span className="font-bold text-xs uppercase tracking-wide text-slate-500">
+                                    {gameMode === "ai" ? "CORRECCIÓN DE FRASE" : "ESTADO DE FRASE"}
+                                  </span>
+                                </div>
+                                <button
+                                  onClick={() => speakSpanishText(userSentence)}
+                                  className="text-xs bg-white text-indigo-700 hover:bg-slate-100 border border-slate-200 px-2 py-1 rounded shadow-sm"
+                                >
+                                  🔊 Escuchar frase
+                                </button>
                               </div>
                               <p className="text-xs text-slate-700 leading-relaxed font-mono italic bg-white/50 p-2 rounded-lg border border-slate-200/60 mb-2 truncate" title={userSentence}>
                                 "{userSentence}"
