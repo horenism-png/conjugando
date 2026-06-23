@@ -61,12 +61,12 @@
 
     // Define the pronouns mapping to Dice 2
     const PRONOUNS = {
-      1: { name: "Yo", translation: "I" },
-      2: { name: "Tú", translation: "You (informal)" },
-      3: { name: "Él / Ella / Ud.", translation: "He / She / You (formal)" },
-      4: { name: "Nosotros / as", translation: "We" },
-      5: { name: "Vosotros / as", translation: "You all (Spain)" },
-      6: { name: "Ellos / Ellas / Uds.", translation: "They / You all (LatAm)" }
+      1: { name: "Yo", translation: "I", key: "yo" },
+      2: { name: "Tú", translation: "You (informal)", key: "tu" },
+      3: { name: "Él / Ella / Ud.", translation: "He / She / You (formal)", key: "el" },
+      4: { name: "Nosotros / as", translation: "We", key: "nosotros" },
+      5: { name: "Vosotros / as", translation: "You all (Spain)", key: "vosotros" },
+      6: { name: "Ellos / Ellas / Uds.", translation: "They / You all (LatAm)", key: "ellos" }
     };
 
     // Base layout flow structures (indices, types, static elements, and default modifiers)
@@ -1294,21 +1294,18 @@
                                 <button
                                   onClick={() => startSpeechRecognition('conjugation')}
                                   className={`p-1.5 rounded-lg border text-xs font-bold transition-all flex items-center gap-1 ${
-                                    isDictatingConjugation ? "bg-red-500 text-white border-red-600 recording-pulse" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                                    isDictatingConjugation ? "bg-red-500 text-white border-red-600 recording-pulse" : "bg-white border-slate-200 hover:bg-slate-50 text-slate-600"
                                   }`}
-                                  title="Haz clic para dictar la conjugación por voz"
                                 >
-                                  <span>🎙️ {isDictatingConjugation ? "Grabando..." : "Dictar"}</span>
+                                  🎙️ {isDictatingConjugation ? "Habla..." : "Decir"}
                                 </button>
-                                {userConjugation && (
-                                  <button
-                                    onClick={() => speakSpanishText(userConjugation)}
-                                    className="p-1.5 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 rounded-lg text-xs"
-                                    title="Escuchar tu respuesta"
-                                  >
-                                    🔊
-                                  </button>
-                                )}
+                                <button
+                                  onClick={() => speakSpanishText(userConjugation)}
+                                  disabled={!userConjugation}
+                                  className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 text-xs font-bold disabled:opacity-40"
+                                >
+                                  🔊 Escuchar
+                                </button>
                               </div>
                             </div>
                             <input
@@ -1332,21 +1329,19 @@
                               <button
                                 onClick={() => startSpeechRecognition('sentence')}
                                 className={`p-1.5 rounded-lg border text-xs font-bold transition-all flex items-center gap-1 ${
-                                  isDictatingSentence ? "bg-red-500 text-white border-red-600 recording-pulse" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                                  isDictatingSentence ? "bg-red-500 text-white border-red-600 recording-pulse" : "bg-white border-slate-200 hover:bg-slate-50 text-slate-600"
                                 }`}
                                 title="Haz clic para dictar la frase completa por voz"
                               >
-                                  <span>🎙️ {isDictatingSentence ? "Grabando..." : "Dictar"}</span>
+                                  <span>🎙️ {isDictatingSentence ? "Habla..." : "Decir"}</span>
                               </button>
-                              {userSentence && (
-                                <button
-                                  onClick={() => speakSpanishText(userSentence)}
-                                  className="p-1.5 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 rounded-lg text-xs"
-                                  title="Escuchar tu frase"
-                                >
-                                  🔊
-                                </button>
-                              )}
+                              <button
+                                onClick={() => speakSpanishText(userSentence)}
+                                disabled={!userSentence}
+                                className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 text-xs font-bold disabled:opacity-40"
+                              >
+                                🔊 Escuchar
+                              </button>
                             </div>
                           </div>
                           <textarea
